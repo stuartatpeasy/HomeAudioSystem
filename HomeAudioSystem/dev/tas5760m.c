@@ -174,6 +174,7 @@ uint8_t tas5760m_init()
     gpio_set(PIN_nSPK_SD);      // Bring the device out of shutdown
     _delay_ms(10);              // Wait for the device to come out of shutdown
 
+    debug_putstr_p("TAS5760M: init done\n");
     return 1;
 }
 

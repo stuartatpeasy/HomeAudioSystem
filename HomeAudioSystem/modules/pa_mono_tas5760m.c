@@ -27,12 +27,12 @@ static uint16_t amp_get_vcc();
 // ISR for pin-change events on GPIO port A.  This function is called when a change-of-state occurs
 // on the nSPK_FAULT input.
 //
-ISR(PORTA_PORT_vect)
+ISR(PORTC_PORT_vect)
 {
-    if(PORTA_INTFLAGS & gpio_pin_bit(PIN_nSPK_FAULT))
+    if(PORTC_INTFLAGS & gpio_pin_bit(PIN_nSPK_FAULT))
     tas5760m_isr_fault();
 
-    PORTA_INTFLAGS = 0xff;      // Clear all pin interrupts
+    PORTC_INTFLAGS = 0xff;      // Clear all pin interrupts
 }
 
 
@@ -49,7 +49,7 @@ static uint16_t amp_get_vcc()
     //
     //      Vcc(mV) = 45 * adc_reading
 
-    adc_set_channel(ADCChannel3);
+    adc_set_channel(ADCChannel7);
     return 45 * adc_convert();
 }
 
@@ -95,7 +95,10 @@ void firmware_main()
     // Attempt to initialise and configure the amplifier module by calling tas5760m_init() until it
     // returns success.  TODO: give up and report an error condition to the controller.
     while(!tas5760m_init())
-    _delay_ms(100);
+    {
+        debug_putstr_p("TAS5760M: init failed\n");
+        _delay_ms(100);
+    }
 
     tas5760m_mute(0);           // Un-mute the amplifier
 
