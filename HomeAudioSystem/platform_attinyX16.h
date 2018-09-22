@@ -1,0 +1,35 @@
+#ifndef PLATFORM_ATTINYX16_H_INC
+#define PLATFORM_ATTINYX16_H_INC
+/*
+    platform_attinyx16.h - pin declarations for the ATTiny416/816 uCs.
+
+    Stuart Wallace <stuartw@atom.net>, September 2018.
+
+    Note that these declarations make use of the GPIO*() macros defined in lib/gpio.h.
+*/
+
+
+// Port A
+#define PIN_SPI_nSS_DEFAULT         GPIOA(4)    // [O] SPI slave select (default pin-set)
+#define PIN_SPI_SCK_DEFAULT         GPIOA(3)    // [O] SPI clock (default pin-set)
+#define PIN_SPI_MISO_DEFAULT        GPIOA(2)    // [I] SPI MISO (default pin-set)
+#define PIN_USART_RXD_ALT           GPIOA(2)    // [I] USART RXD (alternate pin-set)
+#define PIN_SPI_MOSI_DEFAULT        GPIOA(1)    // [O] SPI MOSI (default pin-set)
+#define PIN_USART_TXD_ALT           GPIOA(1)    // [O] USART TXD (alternate pin-set)
+
+// Port B
+#define PIN_USART_RXD_DEFAULT       GPIOB(3)    // [I] USART RXD (default pin-set)
+#define PIN_USART_TXD_DEFAULT       GPIOB(2)    // [O] USART TXD (default pin-set)
+
+// Port C
+#define PIN_SPI_nSS_ALT             GPIOC(3)    // [O] SPI slave select (alternate pin-set)
+#define PIN_SPI_MOSI_ALT            GPIOC(2)    // [O] SPI MOSI (alternate pin-set)
+#define PIN_SPI_MISO_ALT            GPIOC(1)    // [I] SPI MISO (alternate pin-set)
+#define PIN_SPI_SCK_ALT             GPIOC(0)    // [O] SPI clock (alternate pin-set)
+
+
+
+
+
+
+#endif
