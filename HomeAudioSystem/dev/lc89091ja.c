@@ -18,6 +18,8 @@
 #include "../platform.h"
 
 
+#ifdef MODULE_PA_MONO_TAS5760M
+
 #define LC89091JA_I2C_ADDR      (0x12)      // I2C address of the LC89091JA receiver
 
 
@@ -32,9 +34,20 @@ void lc89091ja_init()
 }
 
 
+// lc89091_get_err_state() - return the state of the LC89091JA-H ERR pin, which is asserted when
+// a timing error occurs.  Returns non-zero if the pin is asserted, zero otherwise.
+//
+uint8_t lc89091_get_error_state()
+{
+    return gpio_read(PIN_RX_ERR);
+}
+
+
 // lc89091ja_worker() - worker function, to be called regularly.
 //
 void lc89091ja_worker()
 {
 
 }
+
+#endif // MODULE_PA_MONO_TAS5760M
