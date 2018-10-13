@@ -93,3 +93,31 @@ uint16_t adc_convert_channel(const ADCChannel_t channel)
     adc_set_channel(channel);
     return adc_convert();
 }
+
+
+// adc_channel_from_gpio() - given GPIO pin <pin>, return the ADC channel associated with the pin.
+// If the pin does not represent an ADC channel, return ADCChannelGND.
+//
+ADCChannel_t adc_channel_from_gpio(const GPIOPin_t pin)
+{
+    const GPIOPort_t port = gpio_port(pin);
+    const uint8_t p = gpio_pin(pin);
+
+    // Port A implements ADC channels 0-7 on pins A0-A7
+    if(port == GPIOPortA)
+        return (ADCChannel_t) p;
+
+    // Port B implements ADC channels 8-11 on pins B5, B4, B1 and B0
+    if(port == GPIOPortB)
+    {
+        switch(p)
+        {
+            case 5:     return ADCChannel8;
+            case 4:     return ADCChannel9;
+            case 1:     return ADCChannel10;
+            case 0:     return ADCChannel11;
+        }
+    }
+
+    return ADCChannelGND;       // <pin> does not specify an ADC input pin
+}

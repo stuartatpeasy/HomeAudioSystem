@@ -81,5 +81,6 @@ void adc_set_channel(const ADCChannel_t channel);
 uint16_t adc_convert();
 uint16_t adc_convert_channel(const ADCChannel_t channel);
 void adc_configure_input(const GPIOPin_t pin);
+ADCChannel_t adc_channel_from_gpio(const GPIOPin_t pin);
 
 #endif
