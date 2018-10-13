@@ -1,17 +1,20 @@
 /*
     tas5760m.c - definitions relating to the driver for the TAS5760M I2S-input class-D audio
-    amplifier IC.
+    amplifier IC.  This driver currently assumes that the amplifier is configured in PBTL mode.
 
     Stuart Wallace <stuartw@atom.net>, September 2018.
 */
 
 #include "tas5760m.h"
+#include "lc89091ja.h"
 #include "../platform.h"
 #include "../lib/debug.h"
 #include "../lib/gpio.h"
 #include "../lib/twi.h"
 #include <util/delay.h>
 
+
+#ifdef MODULE_PA_MONO_TAS5760M
 
 #define TAS5760M_I2C_ADDR       (0x6c)      // Default I2C address of a TAS5760M amplifier
 #define TAS5760M_DEVICE_ID      (0x00)      // ID from the "Device Identification" register
@@ -137,7 +140,7 @@ uint8_t tas5760m_init()
 {
     uint8_t id = 0;
 
-    debug_putstr_p("TAS5760M: init\n");
+    debug_putstr_p("TAS5760M: init start\n");
 
     // Attempt to read the device ID.  Fail if the read fails, or the wrong ID is returned.
     if(!sync_register_read(TAS5760MRegDeviceID, &id) || (id != TAS5760M_DEVICE_ID))
@@ -267,6 +270,17 @@ uint8_t tas5760m_mute(const uint8_t mute)
 }
 
 
+// tas5760m_set_volume() - set the volume of both the left and the right channel to the value
+// specified in dB by <vol_db>.  Any value above +24 will be interpreted as +24; any value below
+// -100 will cause the amplifier to mute.
+//
+uint8_t tas5760m_set_volume(const int8_t vol_db)
+{
+    return sync_register_write(TAS5760MRegLeftChVolCtrl, TAS5760M_DB_TO_VOL(vol_db)) &&
+           sync_register_write(TAS5760MRegRightChVolCtrl, TAS5760M_DB_TO_VOL(vol_db));
+}
+
+
 // tas5760m_isr_fault() - ISR associated with state changes on the GPIO pin connected to the
 // amplifier's nSPK_FAULT output.
 //
@@ -274,10 +288,16 @@ void tas5760m_isr_fault()
 {
     if(!gpio_read(PIN_nSPK_FAULT))
     {
-        // The amplifier has entered a fault condition.  Record this status and assert the
-        // amplifier's hardware shutdown (nSPK_SD) line.
-        gpio_clear(PIN_nSPK_SD);
-        status |= TAS5760M_STATUS_FAULT;
+        // The amplifier has entered a fault condition.  For all fault types except clock fault:
+        // record this status and assert the amplifier's hardware shutdown (nSPK_SD) line.  For
+        // clock faults, take no action: these usually indicate that there is no audio source, and
+        // are not a fault condition.
+        if(!lc89091_get_error_state())
+        {
+            // Not a clock fault
+            gpio_clear(PIN_nSPK_SD);
+            status |= TAS5760M_STATUS_FAULT;
+        }
     }
     else
     {
@@ -359,3 +379,4 @@ void tas5760m_dump_fault(const uint8_t fault)
 }
 
 #endif
+#endif // MODULE_PA_MONO_TAS5760M

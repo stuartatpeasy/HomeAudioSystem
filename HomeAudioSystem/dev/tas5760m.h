@@ -2,10 +2,14 @@
 #define DEV_TAS5760M_H_INC
 /*
     tas5760m.h - declarations relating to the driver for the TAS5760M I2S-input class-D audio
-    amplifier IC.
+    amplifier IC.  This driver currently assumes that the amplifier is configured in PBTL mode.
 
     Stuart Wallace <stuartw@atom.net>, September 2018.
 */
+
+#include "../platform.h"
+
+#ifdef MODULE_PA_MONO_TAS5760M
 
 #include <stdint.h>
 
@@ -25,6 +29,7 @@ uint8_t tas5760m_init();
 uint8_t tas5760m_sleep(const uint8_t sleep);
 uint8_t tas5760m_shut_down(const uint8_t shut_down);
 uint8_t tas5760m_mute(const uint8_t mute);
+uint8_t tas5760m_set_volume(const int8_t vol_db);
 void tas5760m_isr_fault();
 void tas5760m_worker();
 
@@ -37,5 +42,5 @@ void tas5760m_dump_fault(const uint8_t fault);
 #define tas5760m_dump_fault(x)
 #endif
 
-
+#endif // MODULE_PA_MONO_TAS5760M
 #endif
