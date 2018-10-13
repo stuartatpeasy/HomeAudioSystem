@@ -7,7 +7,11 @@
     Stuart Wallace <stuartw@atom.net>, September 2018.
 */
 
+#ifdef MODULE_PA_MONO_TAS5760M
+
 
 void firmware_main();
 
+
+#endif // MODULE_PA_MONO_TAS5760M
 #endif

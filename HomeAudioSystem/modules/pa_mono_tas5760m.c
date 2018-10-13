@@ -9,6 +9,7 @@
 #include <avr/interrupt.h>
 #include <avr/io.h>
 #include "../dev/lc89091ja.h"
+#include "../dev/sc16is752.h"
 #include "../dev/tas5760m.h"
 #include "../lib/adc.h"
 #include "../lib/debug.h"
@@ -18,8 +19,10 @@
 #include <util./delay.h>
 
 
-#define AMP_VCC_STARTUP_THRESHOLD       (20000)     // Voltage above which to start the amplifier
+#ifdef MODULE_PA_MONO_TAS5760M
 
+#define AMP_VCC_STARTUP_THRESHOLD       (20000)     // Voltage above which to start the amplifier
+#define AMP_INIT_RETRY_DELAY_MS         (100)       // Amp initialisation retry interval in ms
 
 static uint16_t amp_get_vcc();
 
@@ -30,12 +33,18 @@ static uint16_t amp_get_vcc();
 ISR(PORTC_PORT_vect)
 {
     if(PORTC_INTFLAGS & gpio_pin_bit(PIN_nSPK_FAULT))
-    tas5760m_isr_fault();
+        tas5760m_isr_fault();
+
+    if(PORTC_INTFLAGS & gpio_pin_bit(PIN_nUART_IRQ))
+        sc16is752_isr();
 
     PORTC_INTFLAGS = 0xff;      // Clear all pin interrupts
 }
 
 
+// amp_get_vcc() - read the ADC channel connected to a scaled representation of the amplifier Vcc
+// (supply voltage), and return the voltage, in millivolts, as a uint16_t.
+//
 static uint16_t amp_get_vcc()
 {
     // The amplifier's Vcc passes through a voltage-divider consisting of a 2.7k and a 47k resistor
@@ -49,7 +58,7 @@ static uint16_t amp_get_vcc()
     //
     //      Vcc(mV) = 45 * adc_reading
 
-    adc_set_channel(ADCChannel7);
+    adc_set_channel(adc_channel_from_gpio(PIN_VCC_AMP));
     return 45 * adc_convert();
 }
 
@@ -62,23 +71,23 @@ void firmware_main()
 
     debug_putstr_p("TAS5760M mono PA module\n\n");
 
+    adc_configure_input(PIN_VCC_AMP);
+
     twi_configure_master(PinsetDefault);
     twi_master_enable(1);
     twi_set_clock(TWISpeed_400kHz);
 
-    vref_set(VRefADC0, VRef2V5);
-    vref_enable(VRefADC0, 1);
-
-    adc_set_vref(ADCRefInternal, 1);
-    adc_set_prescaler(ADCPrescaleDiv16);
-    adc_set_initdelay(ADCInitDelay16);
-    adc_configure_input(PIN_VCC_AMP);
-    adc_enable(1);
-
     sei();
 
+    sc16is752_init();                       // Initialise the SC16IS752 dual UART
     lc89091ja_init();                       // Initialise the LC89091 digital receiver
     tas5760m_interface_init();              // Initialise the interface with the TAS5760M
+
+    for(SC16IS752Channel_t c = SC16IS752ChannelA; c <= SC16IS752ChannelB; ++c)
+    {
+        sc16is752_set_baud_rate(c, 230400);
+        sc16is752_enable_auto_rts(c, 1, 1);
+    }
 
     // Given that the amplifier module is powered via a PoE-style interface, i.e. is physically
     // remote from the power source, and the local dc-dc converters drive significant bulk
@@ -97,10 +106,12 @@ void firmware_main()
     while(!tas5760m_init())
     {
         debug_putstr_p("TAS5760M: init failed\n");
-        _delay_ms(100);
+        _delay_ms(AMP_INIT_RETRY_DELAY_MS);
     }
 
+    tas5760m_set_volume(-3);
     tas5760m_mute(0);           // Un-mute the amplifier
+
 
     // Worker loop
     while(1)
@@ -110,3 +121,5 @@ void firmware_main()
         tas5760m_worker();
     }
 }
+
+#endif // MODULE_PA_MONO_TAS5760M
