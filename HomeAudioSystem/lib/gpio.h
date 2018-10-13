@@ -83,6 +83,23 @@ uint8_t gpio_action_read(const GPIOPin_t pin, const GPIOAction_t action);
 #define gpio_get_dir(pin)       gpio_action_read(pin, GPIOActionDirGet)
 
 
+// gpio_port() - return the GPIOPort_t containing the specified GPIOPin_t in <pin>.
+//
+inline GPIOPort_t gpio_port(const GPIOPin_t pin)
+{
+    return pin.port;
+};
+
+
+// gpio_pin() - return the pin number (e.g. GPIO pin "A7" and "B7" both have pin number 7) of the
+// port pin specified by <pin>.
+//
+inline uint8_t gpio_pin(const GPIOPin_t pin)
+{
+    return pin.pin;
+};
+
+
 // gpio_pin_bit() - return a bit-mask corresponding to the pin specified by <pin>.  E.g. for pin 0,
 // the function will return 0x01; for pin 7 it will return 0x80.
 //
