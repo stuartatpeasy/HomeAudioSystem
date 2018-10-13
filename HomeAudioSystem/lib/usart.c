@@ -152,3 +152,4 @@ void usart0_puts_p(const char *str)
     while((c = pgm_read_byte(str++)) != '\0')
         usart0_tx(c);
 }
+
