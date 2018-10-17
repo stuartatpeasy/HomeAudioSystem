@@ -322,7 +322,10 @@ void tas5760m_worker()
             {
                 tas5760m_dump_fault(fault);
                 if(fault & TAS5760M_FAULT_CLKE)
+                {
                     gpio_set(PIN_nSPK_SD);
+                    status &= ~TAS5760M_STATUS_FAULT;
+                }
             }
         }
         else
