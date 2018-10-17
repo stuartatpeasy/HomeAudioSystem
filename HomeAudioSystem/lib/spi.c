@@ -34,7 +34,8 @@ void spi0_configure_master(const Pinset_t pinset, const SPIClkDiv_t div)
     // and disable 2x-clock.  Do this without affecting the "enabled" state of the peripheral.
     SPI0_CTRLA = (SPI0_CTRLA & SPI_ENABLE_bm) | SPI_MASTER_bm | div;
 
-    // Enable buffered mode, and instruct the peripheral to ignore the value at the nSS pin.
+    // Enable buffered mode, select SPI Mode 0, and instruct the peripheral to ignore the value at
+    // the nSS pin.
     SPI0_CTRLB = SPI_BUFEN_bm | SPI_SSD_bm;
 }
 
