@@ -17,6 +17,9 @@
 #error "No module type specified - check platform.h"
 #endif
 
+int8_t g_irq_state = 0;     // Used in util/irq.h
+
+
 // sys_get_vcc() - read the ADC channel connected to a scaled representation of the system supply
 // voltage, and return the voltage, in millivolts, as a uint32_t.
 //
