@@ -13,9 +13,9 @@
 */
 
 #include "lc89091ja.h"
-#include "../lib/debug.h"
-#include "../lib/gpio.h"
-#include "../platform.h"
+#include "lib/debug.h"
+#include "lib/gpio.h"
+#include "platform.h"
 
 
 #ifdef MODULE_PA_MONO_TAS5760M

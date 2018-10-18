@@ -7,7 +7,7 @@
     Stuart Wallace <stuartw@atom.net>, September 2018.
 */
 
-#include "../platform.h"
+#include "platform.h"
 #include <stdint.h>
 
 #ifdef MODULE_PA_MONO_TAS5760M
