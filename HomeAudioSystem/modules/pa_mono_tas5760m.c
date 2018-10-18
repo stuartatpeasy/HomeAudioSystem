@@ -6,17 +6,18 @@
 */
 
 #include "pa_mono_tas5760m.h"
-#include <avr/interrupt.h>
+#include "core/control.h"
+#include "dev/lc89091ja.h"
+#include "dev/sc16is752.h"
+#include "dev/tas5760m.h"
+#include "lib/adc.h"
+#include "lib/debug.h"
+#include "lib/twi.h"
+#include "lib/vref.h"
+#include "platform.h"
+#include "util/irq.h"
 #include <avr/io.h>
-#include "../dev/lc89091ja.h"
-#include "../dev/sc16is752.h"
-#include "../dev/tas5760m.h"
-#include "../lib/adc.h"
-#include "../lib/debug.h"
-#include "../lib/twi.h"
-#include "../lib/vref.h"
-#include "../platform.h"
-#include <util./delay.h>
+#include <util/delay.h>
 
 
 #ifdef MODULE_PA_MONO_TAS5760M
@@ -27,8 +28,8 @@
 static uint16_t amp_get_vcc();
 
 
-// ISR for pin-change events on GPIO port A.  This function is called when a change-of-state occurs
-// on the nSPK_FAULT input.
+// ISR for pin-change events on GPIO port C.  This function is called when a change-of-state occurs
+// on the nSPK_FAULT input, or when the SC16IS752 dual UART asserts its nIRQ output.
 //
 ISR(PORTC_PORT_vect)
 {
@@ -36,7 +37,7 @@ ISR(PORTC_PORT_vect)
         tas5760m_isr_fault();
 
     if(PORTC_INTFLAGS & gpio_pin_bit(PIN_nUART_IRQ))
-        sc16is752_isr();
+        ctrl_serial_isr();
 
     PORTC_INTFLAGS = 0xff;      // Clear all pin interrupts
 }
@@ -77,17 +78,11 @@ void firmware_main()
     twi_master_enable(1);
     twi_set_clock(TWISpeed_400kHz);
 
-    sei();
+    interrupt_enable_increment();
 
-    sc16is752_init();                       // Initialise the SC16IS752 dual UART
     lc89091ja_init();                       // Initialise the LC89091 digital receiver
     tas5760m_interface_init();              // Initialise the interface with the TAS5760M
-
-    for(SC16IS752Channel_t c = SC16IS752ChannelA; c <= SC16IS752ChannelB; ++c)
-    {
-        sc16is752_set_baud_rate(c, 230400);
-        sc16is752_enable_auto_rts(c, 1, 1);
-    }
+    ctrl_init();                            // Initialise the control interface
 
     // Given that the amplifier module is powered via a PoE-style interface, i.e. is physically
     // remote from the power source, and the local dc-dc converters drive significant bulk
@@ -112,13 +107,13 @@ void firmware_main()
     tas5760m_set_volume(-3);
     tas5760m_mute(0);           // Un-mute the amplifier
 
-
     // Worker loop
     while(1)
     {
-        _delay_ms(100);
+        _delay_ms(100);         // FIXME remove
         lc89091ja_worker();
         tas5760m_worker();
+        ctrl_worker();
     }
 }
 
