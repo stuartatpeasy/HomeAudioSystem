@@ -5,41 +5,49 @@
 */
 
 #include "sc16is752.h"
-#include "../platform.h"        // for F_UART
-#include "../lib/debug.h"
-#include "../lib/spi.h"
+#include "lib/debug.h"
+#include "lib/spi.h"
+#include "platform.h"           // for F_UART
+#include "util/irq.h"
 
 
-// SC16IS752Register_t - enumeration of the registers in the SC16IS752.  Some of these registers
+// SC16IS752Register_t - enumeration of the registers in the SC16IS752.  Many of these registers
 // share an address.  In such cases, bits in other registers determine which register is actually
 // accessed.
 //
 typedef enum SC16IS752Register
 {
-    SC16IS752RegRHR_THR     = (0x00 << 3),  // Receive (RHR) / transmit (THR) holding register
-    SC16IS752RegDLL         = (0x00 << 3),  // Baud rate divider - least-significant byte
-    SC16IS752RegIER         = (0x01 << 3),  // Interrupt enable register
-    SC16IS752RegDLH         = (0x01 << 3),  // Baud rate divider - most-significant byte
-    SC16IS752RegFCR_IIR     = (0x02 << 3),  // FIFO control reg (write) / interrupt ID reg (read)
-    SC16IS752RegEFR         = (0x02 << 3),  // Enhanced features register
-    SC16IS752RegLCR         = (0x03 << 3),  // Line control register
-    SC16IS752RegMCR         = (0x04 << 3),  // Modem control register
-    SC16IS752RegXON1        = (0x04 << 3),  // XON1 word
-    SC16IS752RegLSR         = (0x05 << 3),  // Line status register
-    SC16IS752RegXON2        = (0x05 << 3),  // XON2 word
-    SC16IS752RegMSR_TCR     = (0x06 << 3),  // Modem status / transmission control register
-    SC16IS752RegXOFF1       = (0x06 << 3),  // XOFF1 word
-    SC16IS752RegSPR_TLR     = (0x07 << 3),  // Scratch pad register / trigger level register
-    SC16IS752RegXOFF2       = (0x07 << 3),  // XOFF2 word
-    SC16IS752RegTXLVL       = (0x08 << 3),  // Transmitter FIFO level register
-    SC16IS752RegRXLVL       = (0x09 << 3),  // Receiver FIFO level register
-    SC16IS752RegIODir       = (0x0a << 3),  // Programmable IO pins direction register
-    SC16IS752RegIOState     = (0x0b << 3),  // Programmable IO pins state register
-    SC16IS752RegIOIntEna    = (0x0c << 3),  // Programmable IO pins interrupt enable register
-    SC16IS752RegIOControl   = (0x0e << 3),  // Programmable IO pins control register
-    SC16IS752RegEFCR        = (0x0f << 3),  // Extra features control register
-    SC16IS752Reg_End                        // End-of-list sentinel
+    SC16IS752RegRHR         = (0x00 << 3),  // [R ] Receive holding register
+    SC16IS752RegTHR         = (0x00 << 3),  // [ W] Transmit holding register
+    SC16IS752RegDLL         = (0x00 << 3),  // [RW] Baud rate divider - least-significant byte
+    SC16IS752RegIER         = (0x01 << 3),  // [RW] Interrupt enable register
+    SC16IS752RegDLH         = (0x01 << 3),  // [RW] Baud rate divider - most-significant byte
+    SC16IS752RegIIR         = (0x02 << 3),  // [R ] Interrupt identification register
+    SC16IS752RegFCR         = (0x02 << 3),  // [ W] FIFO control register
+    SC16IS752RegEFR         = (0x02 << 3),  // [RW] Enhanced features register
+    SC16IS752RegLCR         = (0x03 << 3),  // [RW] Line control register
+    SC16IS752RegMCR         = (0x04 << 3),  // [RW] Modem control register
+    SC16IS752RegXON1        = (0x04 << 3),  // [RW] XON1 word
+    SC16IS752RegLSR         = (0x05 << 3),  // [R ] Line status register
+    SC16IS752RegXON2        = (0x05 << 3),  // [RW] XON2 word
+    SC16IS752RegMSR         = (0x06 << 3),  // [R ] Modem status register
+    SC16IS752RegTCR         = (0x06 << 3),  // [RW] Transmission control register
+    SC16IS752RegXOFF1       = (0x06 << 3),  // [RW] XOFF1 word
+    SC16IS752RegSPR         = (0x07 << 3),  // [RW] Scratch pad register
+    SC16IS752RegTLR         = (0x07 << 3),  // [RW] Trigger level register
+    SC16IS752RegXOFF2       = (0x07 << 3),  // [RW] XOFF2 word
+    SC16IS752RegTXLVL       = (0x08 << 3),  // [R ] Transmitter FIFO level register
+    SC16IS752RegRXLVL       = (0x09 << 3),  // [R ] Receiver FIFO level register
+    SC16IS752RegIODir       = (0x0a << 3),  // [RW] Programmable IO pins direction register
+    SC16IS752RegIOState     = (0x0b << 3),  // [RW] Programmable IO pins state register
+    SC16IS752RegIOIntEna    = (0x0c << 3),  // [RW] Programmable IO pins interrupt enable register
+    SC16IS752RegIOControl   = (0x0e << 3),  // [RW] Programmable IO pins control register
+    SC16IS752RegEFCR        = (0x0f << 3),  // [RW] Extra features control register
+    SC16IS752Reg_End                        // [--] End-of-list sentinel
 } SC16IS752Register_t;
+
+// Macro defining the size of the "stride" between registers, to simplify iterating.
+#define SC16IS752RegOffset      (1 << 3)
 
 // Magic number which, when written to LCR, enables the enhanced registers.
 #define SC16IS752_ENABLE_ENHANCED_REG   (0xbf)
@@ -94,6 +102,11 @@ typedef enum SC16IS752LCRWordLen
     SC16IS752WordLen8 = 3       // Word length = 8 bits
 } SC16IS752LCRWordLen_t;
 
+// SC16IS752RegIIR - interrupt identification register - bit definitions
+#define SC16IS752_IIR_PRI_MASK      (0x3e)      // Mask for interrupt priority bits
+#define SC16IS752_IIR_PRI_SHIFT     (1)         // Offset of interrupt priority bits
+#define SC16IS752_IIR_INT_STATUS    (1 << 0)    // Interrupt status: 1 = int pending; 0 = no int
+
 // SC16IS752RegIOControl (0xe) - bit definitions
 #define SC16IS752_IOCTRL_SRESET     (1 << 3)    // Software reset
 #define SC16IS752_IOCTRL_GPIO30     (1 << 2)    // 0 = GPIO[3..0] are IO; 1 = modem control pins
@@ -138,11 +151,19 @@ uint8_t sc16is752_init()
 
     sc16is752_reset();
 
-    for(SC16IS752Channel_t channel = SC16IS752ChannelA; channel <= SC16IS752ChannelB; ++channel)
+    // Disable GPIO interrupts, set all GPIO pins to logic 0 and configure the pins as outputs.  A
+    // side-effect of sc16is752_reset() is to configure all of the modem-control/GPIO pins as GPIO
+    // pins, so it is not necessary to do that here.
+    sc16is752_write(SC16IS752ChannelA, SC16IS752RegIOIntEna, 0x00);
+    sc16is752_write(SC16IS752ChannelA, SC16IS752RegIOState, 0x00);
+    sc16is752_write(SC16IS752ChannelA, SC16IS752RegIODir, 0xff);
+
+    for(SC16IS752Channel_t channel = SC16IS752ChannelA; channel <= SC16IS752ChannelB;
+        channel += SC16IS752ChannelOffset)
     {
         // Enable RX and TX FIFOs, and set default FIFO trigger levels
-        sc16is752_write(channel, SC16IS752RegFCR_IIR,
-                        SC16IS752RXTrigger8 | SC16IS752_FCR_FIFO_ENABLE);
+        sc16is752_write(channel, SC16IS752RegFCR,
+                        SC16IS752RXTrigger8 | SC16IS752TXTrigger8 | SC16IS752_FCR_FIFO_ENABLE);
 
         // Set default line discipline: 8 bits per word, 1 stop bit, no parity
         sc16is752_write(channel, SC16IS752RegLCR, SC16IS752WordLen8);
@@ -150,16 +171,6 @@ uint8_t sc16is752_init()
 
     debug_putstr_p("SC16IS752: init done\n");
     return 1;
-}
-
-
-// sc16is752_isr() - interrupt handler.  This function should be called by a generic pin-state
-// interrupt service routine if the nUART_IRQ pin is asserted.  It therefore executes in interrupt
-// context.
-//
-void sc16is752_isr()
-{
-
 }
 
 
@@ -173,7 +184,8 @@ void sc16is752_reset()
     // as the contents of the register does not survive a software reset.
 
     // Iterate over the channels in the device
-    for(SC16IS752Channel_t channel = SC16IS752ChannelA; channel <= SC16IS752ChannelB; ++channel)
+    for(SC16IS752Channel_t channel = SC16IS752ChannelA; channel <= SC16IS752ChannelB;
+        channel += SC16IS752ChannelOffset)
     {
         // Initiate the software reset on the channel
         sc16is752_write(channel, SC16IS752RegIOControl, SC16IS752_IOCTRL_SRESET);
@@ -190,8 +202,9 @@ void sc16is752_reset()
         // 2 x T(clk) of XTAL1 before reading or writing data to RHR and THR respectively".  This
         // delay should be unnecessary with a sufficiently fast XTAL1, and is in any case left to
         // the calling code.
-        sc16is752_write(channel, SC16IS752RegFCR_IIR,
-                        SC16IS752_FCR_RESET_TX_FIFO | SC16IS752_FCR_RESET_RX_FIFO);
+        sc16is752_write(channel, SC16IS752RegFCR,
+                        SC16IS752_FCR_RESET_TX_FIFO | SC16IS752_FCR_RESET_RX_FIFO |
+                        SC16IS752_FCR_FIFO_ENABLE);
     }
 }
 
@@ -256,6 +269,86 @@ void sc16is752_enable_auto_rts(const SC16IS752Channel_t channel, const uint8_t e
 }
 
 
+// sc16is752_get_interrupt_mask() - return the contents of the IER (interrupt enable register) for
+// the channel specified by <channel>.
+//
+uint8_t sc16is752_get_interrupt_mask(const SC16IS752Channel_t channel)
+{
+    return sc16is752_read(channel, SC16IS752RegIER);
+}
+
+
+// sc16is752_set_interrupt_mask() - write <mask> to the IER (interrupt enable register) for the
+// channel specified by <channel>.
+//
+void sc16is752_set_interrupt_mask(const SC16IS752Channel_t channel, const uint8_t mask)
+{
+    sc16is752_write(channel, SC16IS752RegIER, mask);
+}
+
+
+// sc16is752_get_interrupt_source() - get the interrupt source flags for the channel specified by
+// <channel>.  The flags indicate the source of any pending interrupt.
+//
+SC16IS752IntFlags_t sc16is752_get_interrupt_source(const SC16IS752Channel_t channel)
+{
+    return (sc16is752_read(channel, SC16IS752RegIIR) & SC16IS752_IIR_PRI_MASK);
+}
+
+
+// sc16is752_tx() - transmit the byte specified by <data> on the channel specified by <channel>.
+// Return 0 on success, or 1 if the transmit FIFO is full.
+//
+uint8_t sc16is752_tx(const SC16IS752Channel_t channel, const uint8_t data)
+{
+    if(!sc16is752_read(channel, SC16IS752RegTXLVL))
+        return 1;       // Insufficient space in FIFO
+
+    sc16is752_write(channel, SC16IS752RegTHR, data);
+    return 0;
+}
+
+
+// sc16is752_tx_buf() - write the data pointed to by <buf>, of length <len>, to the FIFO for
+// channel <channel>.  Returns non-zero on failure (if there is not sufficient space in the
+// transmit FIFO); zero on success.  If data is written to the device, interrupts will be disabled
+// around the SPI transaction.
+//
+uint8_t sc16is752_tx_buf(const SC16IS752Channel_t channel, const void * const buf,
+                         const uint8_t len)
+{
+    const uint8_t *buf_ = (const uint8_t *) buf, *end_ = buf_ + len;
+
+    if(sc16is752_read(channel, SC16IS752RegTXLVL) < len)
+        return 1;       // Insufficient space in FIFO
+
+    // Perform a burst write to the peripheral
+    interrupt_enable_decrement();
+    spi0_slave_select(1);       // Assert SPI_nSS (peripheral select)
+    spi0_tx(SC16IS752SPIDirWrite | SC16IS752RegTXLVL | channel);
+
+    while(buf_ != end_)
+        spi0_tx(*(buf_++));     // Read and write data
+
+    spi0_slave_select(0);       // Negate SPI_nSS (peripheral select)
+
+    spi0_read();                // } Perform two dummy reads to clear the SPI input buffer
+    spi0_read();                // }
+    interrupt_enable_increment();
+
+    return 0;
+}
+
+
+// sc16is752_rx() - read the byte at the top of the receive FIFO for the channel specified by
+// <channel>.
+//
+uint8_t sc16is752_rx(const SC16IS752Channel_t channel)
+{
+    return sc16is752_read(channel, SC16IS752RegRHR);
+}
+
+
 // sc16is752_read() - helper function which performs a SPI read of register <reg>, in channel
 // <channel>, and returns the value.
 //
@@ -284,13 +377,21 @@ static void sc16is752_write(const SC16IS752Channel_t channel, const SC16IS752Reg
 static uint8_t sc16is752_spi_op(const SC16IS752SPIDir_t dir, const SC16IS752Channel_t channel,
                                 const SC16IS752Register_t reg, const uint8_t data)
 {
-    spi0_slave_select(1);       // Assert SPI_nSS (slave select)
+    uint8_t ret;
+
+    interrupt_enable_decrement();
+    spi0_slave_select(1);       // Assert SPI_nSS (peripheral select)
     spi0_tx(dir | reg | channel);
     spi0_tx(data);              // Read and write data
-    spi0_slave_select(0);       // Negate SPI_nSS (slave select)
+    spi0_slave_select(0);       // Negate SPI_nSS (peripheral select)
 
-    return spi0_read();         // Return the contents of the SPI read buffer
+    spi0_read();                // Discard the first (dummy) byte received from the peripheral
+    ret = spi0_read();          // Read the data returned by the peripheral (if any)
+    interrupt_enable_increment();
+
+    return ret;
 }
+
 
 #ifdef DEBUG
 
@@ -299,11 +400,13 @@ static uint8_t sc16is752_spi_op(const SC16IS752SPIDir_t dir, const SC16IS752Chan
 //
 void sc16is752_dump_registers()
 {
-    debug_putstr_p("==== SC16IS752 register dump ====\n");
-    for(SC16IS752Register_t x = 0; x < SC16IS752Reg_End; x += 8)
+    debug_putstr_p("==== SC16IS752 register dump ====\n"
+                   "      ChA ChB\n");
+    for(SC16IS752Register_t x = 0; x < SC16IS752Reg_End; x += SC16IS752RegOffset)
     {
-        const uint8_t data = sc16is752_read(SC16IS752ChannelA, x);
-        debug_printf("R%02x = %02x\n", x >> 3, data);
+        const uint8_t data_a = sc16is752_read(SC16IS752ChannelA, x),
+                      data_b = sc16is752_read(SC16IS752ChannelB, x);
+        debug_printf("R%02x = %02x  %02x\n", x / SC16IS752RegOffset, data_a, data_b);
     }
 }
 
