@@ -60,7 +60,7 @@ int main(void)
     adc_enable(1);
 
     adc_configure_input(PIN_VCC_IN);
-    debug_printf("Vcc(supply) = %lumV\n", sys_get_vcc());
+    debug_printf("Vcc(in) = %lumV\n", sys_get_vcc());
 
     firmware_main();
 }
