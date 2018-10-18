@@ -6,7 +6,7 @@
     Stuart Wallace <stuartw@atom.net>, July 2018.
 */
 
-#include "../platform.h"        // for F_EXT_CLOCK
+#include "platform.h"        // for F_EXT_CLOCK
 #include <avr/io.h>
 
 

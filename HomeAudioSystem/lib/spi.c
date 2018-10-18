@@ -6,7 +6,7 @@
 
 #include "spi.h"
 #include "gpio.h"
-#include "../platform.h"
+#include "platform.h"
 
 
 static GPIOPin_t SPI_nSS;
