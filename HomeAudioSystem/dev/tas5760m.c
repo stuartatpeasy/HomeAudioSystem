@@ -5,12 +5,13 @@
     Stuart Wallace <stuartw@atom.net>, September 2018.
 */
 
-#include "tas5760m.h"
-#include "lc89091ja.h"
-#include "../platform.h"
-#include "../lib/debug.h"
-#include "../lib/gpio.h"
-#include "../lib/twi.h"
+#include "dev/tas5760m.h"
+#include "core/control.h"
+#include "dev/lc89091ja.h"
+#include "lib/debug.h"
+#include "lib/gpio.h"
+#include "lib/twi.h"
+#include "platform.h"
 #include <util/delay.h>
 
 
@@ -332,12 +333,39 @@ void tas5760m_worker()
         {
             // Failed to read the fault/error register.
             // FIXME: shut down the amplifier
-            debug_putstr_p("TAS5760M: failed to read fault reg\n");
+            debug_putstr_p("TAS5760M: fault reg read failed\n");
         }
     }
 }
 
+//
+// Control interface command handlers from here on
+//
 
+
+// ctrl_amp_set_channel() - set the channel (e.g. left or right) to be amplified by this module.
+//
+CtrlResponse_t ctrl_amp_set_channel(const CtrlArgChannel_t channel)
+{
+    uint8_t actrl_val;
+
+    if(!sync_register_read(TAS5760MRegACtrl, &actrl_val))
+        return CtrlRespOperationFailed;
+
+    if(channel == CtrlAmpChannelLeft)
+        actrl_val |= TAS5760M_ACTRL_PBTL_LEFT;
+    else if(channel == CtrlAmpChannelRight)
+        actrl_val &= ~TAS5760M_ACTRL_PBTL_LEFT;
+    else
+        return CtrlRespBadArg;
+
+    return sync_register_write(TAS5760MRegACtrl, actrl_val) ? CtrlRespOperationFailed : CtrlRespOK;
+}
+
+
+//
+// Debug functions from here on
+//
 #ifdef DEBUG
 
 // tas5760m_dump_registers() - if a debug build is running, dump the contents of the TAS5760M
@@ -354,7 +382,7 @@ void tas5760m_dump_registers()
         if(sync_register_read(r, &val))
             debug_printf("R%02d = %02x\n", r, val);
         else
-            debug_putstr_p("(register read failed)\n");
+            debug_putstr_p("(read failed)\n");
     }
 }
 
@@ -367,18 +395,21 @@ void tas5760m_dump_fault(const uint8_t fault)
     debug_putstr_p("TAS5760M fault status: ");
 
     if(!fault)
-        debug_putstr_p("no fault");
+    {
+        debug_putstr_p("none\n");
+        return;
+    }
 
     if(fault & TAS5760M_FAULT_CLKE)
-        debug_putstr_p("clk_error ");
+        debug_putstr_p("clk ");
     if(fault & TAS5760M_FAULT_OCE)
-        debug_putstr_p("overcurrent_error ");
+        debug_putstr_p("overcurrent ");
     if(fault & TAS5760M_FAULT_DCE)
-        debug_putstr_p("dc_offset_error ");
+        debug_putstr_p("dc_offset ");
     if(fault & TAS5760M_FAULT_OTE)
-        debug_putstr_p("overtemp_error ");
+        debug_putstr_p("overtemp ");
 
-    debug_putstr_p("\n");
+    debug_putstr_p("err\n");
 }
 
 #endif
