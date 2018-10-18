@@ -15,8 +15,8 @@
                   PA5 -| 3          18 |- PA2  SPI_MISO
           VCC_IN  PA6 -| 4          17 |- PA1  SPI_MOSI
          VCC_AMP  PA7 -| 5          16 |- PA0  UPDI
-                  PB5 -| 6          15 |- PC3  nUART_IRQ
-                  PB4 -| 7          14 |- PC2  nSPK_FAULT
+            LED1  PB5 -| 6          15 |- PC3  nUART_IRQ
+            LED0  PB4 -| 7          14 |- PC2  nSPK_FAULT
        USART_RXD  PB3 -| 8          13 |- PC1  nSPK_SD
        USART_TXD  PB2 -| 9          12 |- PC0  RX_ERR
          I2C_SDA  PB1 -| 10         11 |- PB0  I2C_SCL
