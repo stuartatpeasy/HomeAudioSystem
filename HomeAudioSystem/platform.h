@@ -48,6 +48,8 @@ For BT source module:
 #define PIN_VCC_IN                  GPIOA(6)    // [AI] System supply voltage (scaled)
 
 // Port B
+#define PIN_LED1                    GPIOB(5)    // [O]
+#define PIN_LED0                    GPIOB(4)    //
 #define PIN_I2C_SDA                 GPIOB(1)    // [I/O] I2C data
 #define PIN_I2C_SCL                 GPIOB(0)    // [I/O] I2C clock
 
