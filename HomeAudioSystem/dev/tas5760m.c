@@ -275,10 +275,31 @@ uint8_t tas5760m_mute(const uint8_t mute)
 // specified in dB by <vol_db>.  Any value above +24 will be interpreted as +24; any value below
 // -100 will cause the amplifier to mute.
 //
-uint8_t tas5760m_set_volume(const int8_t vol_db)
+uint8_t tas5760m_set_gain(const int8_t gain)
 {
-    return sync_register_write(TAS5760MRegLeftChVolCtrl, TAS5760M_DB_TO_VOL(vol_db)) &&
-           sync_register_write(TAS5760MRegRightChVolCtrl, TAS5760M_DB_TO_VOL(vol_db));
+    return sync_register_write(TAS5760MRegLeftChVolCtrl, TAS5760M_DB_TO_VOL(gain)) &&
+           sync_register_write(TAS5760MRegRightChVolCtrl, TAS5760M_DB_TO_VOL(gain));
+}
+
+
+// tas5760m_set_pbtl_channel() - set the channel to be amplified when the amplifier is configured
+// in parallel bridge-tied-load (PBTL) mode.  Returns zero on failure; non-zero otherwise.
+//
+uint8_t tas5760m_set_pbtl_channel(const TAS5760MPBTLChannel_t channel)
+{
+    uint8_t actrl_val;
+
+    if(!sync_register_read(TAS5760MRegACtrl, &actrl_val))
+        return 0;       // Register read failed
+
+    if(channel == TAS5760MPBTLChannelLeft)
+        actrl_val |= TAS5760M_ACTRL_PBTL_LEFT;
+    else if(channel == TAS5760MPBTLChannelRight)
+        actrl_val &= ~TAS5760M_ACTRL_PBTL_LEFT;
+    else
+        return 0;       // Invalid argument
+
+    return sync_register_write(TAS5760MRegACtrl, actrl_val);
 }
 
 
@@ -336,30 +357,6 @@ void tas5760m_worker()
             debug_putstr_p("TAS5760M: fault reg read failed\n");
         }
     }
-}
-
-//
-// Control interface command handlers from here on
-//
-
-
-// ctrl_amp_set_channel() - set the channel (e.g. left or right) to be amplified by this module.
-//
-CtrlResponse_t ctrl_amp_set_channel(const CtrlArgChannel_t channel)
-{
-    uint8_t actrl_val;
-
-    if(!sync_register_read(TAS5760MRegACtrl, &actrl_val))
-        return CtrlRespOperationFailed;
-
-    if(channel == CtrlAmpChannelLeft)
-        actrl_val |= TAS5760M_ACTRL_PBTL_LEFT;
-    else if(channel == CtrlAmpChannelRight)
-        actrl_val &= ~TAS5760M_ACTRL_PBTL_LEFT;
-    else
-        return CtrlRespBadArg;
-
-    return sync_register_write(TAS5760MRegACtrl, actrl_val) ? CtrlRespOperationFailed : CtrlRespOK;
 }
 
 

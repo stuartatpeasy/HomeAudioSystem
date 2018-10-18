@@ -104,7 +104,7 @@ void firmware_main()
         _delay_ms(AMP_INIT_RETRY_DELAY_MS);
     }
 
-    tas5760m_set_volume(-3);
+    tas5760m_set_gain(-3);
     tas5760m_mute(0);           // Un-mute the amplifier
 
     // Worker loop
@@ -115,6 +115,46 @@ void firmware_main()
         tas5760m_worker();
         ctrl_worker();
     }
+}
+
+
+//
+// Handlers for control commands
+//
+
+
+// ctrl_set_channel() - set the channel (e.g. left or right) to be amplified by this module.
+//
+CtrlResponse_t ctrl_set_channel(const CtrlArgChannel_t channel)
+{
+    TAS5760MPBTLChannel_t ch;
+
+    if(channel == CtrlAmpChannelLeft)
+        ch = TAS5760MPBTLChannelLeft;
+    else if(channel == CtrlAmpChannelRight)
+        ch = TAS5760MPBTLChannelRight;
+    else
+        return CtrlRespBadArg;
+
+    return tas5760m_set_pbtl_channel(ch) ? CtrlRespOK : CtrlRespOperationFailed;
+}
+
+
+// ctrl_set_gain() - set the gain of the amplifier to the value specified by <gain>, which uses
+// units of 0.5dB.
+//
+CtrlResponse_t ctrl_set_gain(const int8_t gain)
+{
+    return tas5760m_set_gain(gain) ? CtrlRespOK : CtrlRespOperationFailed;
+}
+
+
+// ctrl_set_pairing() - set the (e.g. Bluetooth) pairing state of the peripheral.  Not supported by
+// this device.
+//
+CtrlResponse_t ctrl_set_pairing(const CtrlArgPairingState_t state)
+{
+    return CtrlRespUnsupportedOperation;
 }
 
 #endif // MODULE_PA_MONO_TAS5760M

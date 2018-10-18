@@ -9,7 +9,6 @@
 #include "dev/sc16is752.h"
 #include "util/irq.h"
 #include <stddef.h>             // size_t
-#include <stdint.h>
 
 
 // CtrlCmd_t - enumeration of commands supported by the system
@@ -19,25 +18,13 @@ typedef enum CtrlCmd
     CmdIdentify     = 0,
     CmdPowerState   = 1,
     CmdChannel      = 2,
-    CmdVolume       = 3,
+    CmdGain         = 3,
     CmdPairing      = 4
 } CtrlCmd_t;
 
 
-typedef enum CtrlArgPowerState
-{
-    ArgPowerStateMinimum    = 0,
-    ArgPowerStateFull       = 1
-} CtrlArgPowerState_t;
-
-
-typedef enum CtrlArgPairingState
-{
-    ArgPairingGetState      = 0,
-    ArgPairingForceUnpair   = 1
-} CtrlArgPairingState_t;
-
-
+// CtrlMsgHeader_t - header block, which starts all command and command-response packets.
+//
 typedef struct CtrlMsgHeader
 {
     uint8_t             type_hop;       // [7:4] - message type; [2:0] - hop count
@@ -47,21 +34,36 @@ typedef struct CtrlMsgHeader
 } CtrlMsgHeader_t;
 
 
+// CtrlCmdArg_t - union of the various one-byte arguments that can be supplied in command packets.
+//
 typedef union CtrlCmdArg
 {
-    uint8_t             block;          // CmdIdentify: block number
-    CtrlArgPowerState_t state;          // CmdPowerState: desired power state
-    CtrlArgChannel_t    channel;        // CmdChannel: channel ID
-    uint8_t             volume;         // CmdVolume: desired volume level
+    uint8_t                 block;          // CmdIdentify: block number
+    CtrlArgPowerState_t     power_state;    // CmdPowerState: desired power state
+    CtrlArgChannel_t        channel;        // CmdChannel: channel ID
+    int8_t                  gain;           // CmdGain: desired gain, in units of 0.5dB
+    CtrlArgPairingState_t   pairing_state;  // CmdPairing: arguments related to pairing state
 } CtrlCmdArg_t;
 
 
+// CtrlMsgCommand_t - structure defining a control command, sent by the controller module to a
+// peripheral module.
+//
 typedef struct CtrlMsgCommand
 {
     CtrlMsgHeader_t     header;
     CtrlCmdArg_t        arg;
 } CtrlMsgCommand_t;
 
+
+// CtrlMsgResponse_t - structure defining a control command response, sent by a peripheral to the
+// controller.
+//
+typedef struct CtrlMsgResponse
+{
+    CtrlMsgHeader_t     header;
+    CtrlResponse_t      resp;
+} CtrlMsgResponse_t;
 
 
 #define CMD_HOP_MASK    (0x0f)
@@ -95,12 +97,9 @@ typedef enum CtrlFSMCommand
 #define CTRL_CKSUM                  (0xff)      // Checksum of a valid packet
 
 static volatile uint8_t g_flags;
-static uint8_t g_downstream_cksum;
-static CtrlFSMCommand_t g_downstream_state;
-static CtrlMsgCommand_t g_downstream_packet;
 
-static void ctrl_fsm_downstream(const uint8_t rx_char);
-static void ctrl_handle_command_packet();
+static void ctrl_fsm_downstream(CtrlMsgCommand_t * const cmd, const uint8_t rx_char);
+static void ctrl_handle_command_packet(const CtrlMsgCommand_t * const cmd);
 
 static const SC16IS752Channel_t ChanDownstream = SC16IS752ChannelA,
                                 ChanUpstream = SC16IS752ChannelB;
@@ -111,7 +110,6 @@ static const SC16IS752Channel_t ChanDownstream = SC16IS752ChannelA,
 void ctrl_init()
 {
     g_flags = 0;
-    g_downstream_state = CtrlFSMWaitStart1;
 
     sc16is752_init();           // Initialise the SC16IS752 dual UART
 
@@ -138,6 +136,8 @@ void ctrl_serial_isr()
 //
 void ctrl_worker()
 {
+    static CtrlMsgCommand_t downstream_packet;
+
     if(g_flags & CTRL_FLAG_SERIAL_IRQ)
     {
         SC16IS752IntFlags_t ser_irq_flags;
@@ -157,7 +157,7 @@ void ctrl_worker()
         // If a byte has been received from the downstream port, pass it to the downstream FSM for
         // handling.
         if(SC16IS752IntRXDataReady(ser_irq_flags))
-            ctrl_fsm_downstream(sc16is752_rx(ChanDownstream));
+            ctrl_fsm_downstream(&downstream_packet, sc16is752_rx(ChanDownstream));
 
         g_flags &= ~CTRL_FLAG_SERIAL_IRQ;
         interrupt_enable_increment();
@@ -165,16 +165,16 @@ void ctrl_worker()
 
     if(g_flags & CTRL_FLAG_DOWNSTREAM_PKT_RX)
     {
-        if(g_downstream_packet.header.type_hop & CMD_HOP_MASK)
+        if(downstream_packet.header.type_hop & CMD_HOP_MASK)
         {
             // Decrement hop count and forward packet to upstream port
-            --g_downstream_packet.header.type_hop;
+            --downstream_packet.header.type_hop;
 
             // FIXME - check for failure
-            sc16is752_tx_buf(ChanUpstream, &g_downstream_packet, sizeof(g_downstream_packet));
+            sc16is752_tx_buf(ChanUpstream, &downstream_packet, sizeof(downstream_packet));
         }
         else
-            ctrl_handle_command_packet();
+            ctrl_handle_command_packet(&downstream_packet);
 
         g_flags &= ~CTRL_FLAG_DOWNSTREAM_PKT_RX;
     }
@@ -183,13 +183,16 @@ void ctrl_worker()
 
 // ctrl_fsm_downstream() - FSM handling receipt of data from the downstream control port.
 //
-static void ctrl_fsm_downstream(const uint8_t rx_char)
+static void ctrl_fsm_downstream(CtrlMsgCommand_t * const cmd, const uint8_t rx_char)
 {
-    switch(g_downstream_state)
+    static CtrlFSMCommand_t state = CtrlFSMWaitStart1;
+    static uint8_t cksum;
+
+    switch(state)
     {
         case CtrlFSMWaitStart1:
             if(rx_char == CTRL_PACKET_START1)
-                g_downstream_state = CtrlFSMWaitStart2;
+                state = CtrlFSMWaitStart2;
             break;
 
         case CtrlFSMWaitStart2:
@@ -197,11 +200,11 @@ static void ctrl_fsm_downstream(const uint8_t rx_char)
             // reset the FSM such that it waits for the start of a new packet.
             if(rx_char == CTRL_PACKET_START2)
             {
-                g_downstream_state = CtrlFSMWaitCmdByte1;
-                g_downstream_cksum = 0;
+                state = CtrlFSMWaitCmdByte1;
+                cksum = 0;
             }
             else
-                g_downstream_state = CtrlFSMWaitStart1;
+                state = CtrlFSMWaitStart1;
             break;
 
         case CtrlFSMWaitCmdByte1:
@@ -209,10 +212,10 @@ static void ctrl_fsm_downstream(const uint8_t rx_char)
         case CtrlFSMWaitCmdByte3:
         case CtrlFSMWaitCmdByte4:
         case CtrlFSMWaitCmdByte5:
-            *(((uint8_t *) &g_downstream_packet) + (g_downstream_state - CtrlFSMWaitCmdByte1))
+            *(((uint8_t *) cmd) + (state - CtrlFSMWaitCmdByte1))
                 = rx_char;
-            g_downstream_cksum += rx_char;
-            ++g_downstream_state;
+            cksum += rx_char;
+            ++state;
             break;
 
         case CtrlFSMWaitStop:
@@ -221,10 +224,10 @@ static void ctrl_fsm_downstream(const uint8_t rx_char)
             // FSM so that a new packet may be received.
             // NOTE: the received packet must be handled (or copied) before the arrival of the
             // first data byte of any subsequent packet.
-            if((rx_char == CTRL_PACKET_STOP) && (g_downstream_cksum == CTRL_CKSUM))
+            if((rx_char == CTRL_PACKET_STOP) && (cksum == CTRL_CKSUM))
                 g_flags |= CTRL_FLAG_DOWNSTREAM_PKT_RX;
 
-            g_downstream_state = CtrlFSMWaitStart1;
+            state = CtrlFSMWaitStart1;
             break;
     }
 }
@@ -232,12 +235,15 @@ static void ctrl_fsm_downstream(const uint8_t rx_char)
 
 // ctrl_handle_command_packet() - handle a packet addressed to this device by the controller.
 //
-static void ctrl_handle_command_packet()
+static void ctrl_handle_command_packet(const CtrlMsgCommand_t * const cmd)
 {
-    CtrlResponse_t resp;
-    size_t resp_len = sizeof(g_downstream_packet.header);
+    CtrlMsgResponse_t response;
+    size_t len = sizeof(response);
+    const uint8_t start[2] = {CTRL_PACKET_START1, CTRL_PACKET_START2};
 
-    switch(g_downstream_packet.header.cmd)
+    response.resp = CtrlRespUnsupportedOperation;
+
+    switch(cmd->header.cmd)
     {
         case CmdIdentify:
             break;
@@ -246,15 +252,25 @@ static void ctrl_handle_command_packet()
             break;
 
         case CmdChannel:
-            resp = ctrl_amp_set_channel(g_downstream_packet.arg.channel);
+            response.resp = ctrl_set_channel(cmd->arg.channel);
             break;
 
-        case CmdVolume:
+        case CmdGain:
+            response.resp = ctrl_set_gain(cmd->arg.gain);
             break;
 
         case CmdPairing:
+            response.resp = ctrl_set_pairing(cmd->arg.pairing_state);
             break;
     }
 
-//    sc16is752_tx_buf(ChanDownstream, )
+    response.header.cmd = cmd->header.cmd;
+    response.header.id = cmd->header.id;
+    response.header.type_hop = 0;                           // FIXME check this
+
+    // Transmit response
+    // FIXME - check for errors
+    sc16is752_tx_buf(ChanDownstream, start, sizeof(start));
+    sc16is752_tx_buf(ChanDownstream, &response, len);
+    sc16is752_tx(ChanDownstream, CTRL_PACKET_STOP);
 }
