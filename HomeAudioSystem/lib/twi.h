@@ -62,7 +62,11 @@ TWICmdStatus_t twi_sync_register_read(const uint8_t dev_addr, const uint8_t reg_
                                       uint8_t * const data);
 TWICmdStatus_t twi_sync_register_write(const uint8_t dev_addr, const uint8_t reg_addr,
                                        uint8_t data);
-// TODO: reset_nack
-// TODO: reset_err
 
-#endif
+
+#ifdef DEBUG
+void twi_dump_registers(const uint8_t address, const uint8_t max);
+#else
+#define twi_dump_registers(address, max)
+#endif // DEBUG
+#endif // LIB_TWI_H_INC
