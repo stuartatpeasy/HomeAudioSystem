@@ -8,7 +8,6 @@
 #include "lib/adc.h"
 #include "lib/clk.h"
 #include "lib/debug.h"
-#include "lib/twi.h"
 #include "lib/vref.h"
 
 #ifdef MODULE_PA_MONO_TAS5760M
