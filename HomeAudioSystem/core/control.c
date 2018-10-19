@@ -15,11 +15,11 @@
 //
 typedef enum CtrlCmd
 {
-    CmdIdentify     = 0,
-    CmdPowerState   = 1,
-    CmdChannel      = 2,
-    CmdGain         = 3,
-    CmdPairing      = 4
+    CmdIdentify     = 0,        // Obtain device identity, block by block
+    CmdPowerState   = 1,        // Set device power state
+    CmdChannel      = 2,        // Set channel amplified by device, or used by source device
+    CmdGain         = 3,        // Set device gain
+    CmdPairing      = 4         // Set or retrieve pairing status (e.g. for Bluetooth devices)
 } CtrlCmd_t;
 
 
@@ -27,7 +27,7 @@ typedef enum CtrlCmd
 //
 typedef struct CtrlMsgHeader
 {
-    uint8_t             type_hop;       // [7:4] - message type; [2:0] - hop count
+    uint8_t             type_hop;       // [7:4] - message type; [3:0] - hop count
     uint8_t             id;             // Message ID
     CtrlCmd_t           cmd;            // Command identifier
     uint8_t             cksum;          // Checksum
@@ -66,23 +66,21 @@ typedef struct CtrlMsgResponse
 } CtrlMsgResponse_t;
 
 
-#define CMD_HOP_MASK    (0x0f)
-#define CMD_TYPE_MASK   (0xf0)
-
 // CtrlFSMCommand_t - FSM states for command receipt.  This FSM is used when receiving data from
 // the downstream control port.
 //
 typedef enum CtrlFSMCommand
 {
-    CtrlFSMWaitStart1,
-    CtrlFSMWaitStart2,
-    CtrlFSMWaitCmdByte1,
-    CtrlFSMWaitCmdByte2,
-    CtrlFSMWaitCmdByte3,
-    CtrlFSMWaitCmdByte4,
-    CtrlFSMWaitCmdByte5,
-    CtrlFSMWaitStop
+    CtrlFSMWaitStart1,              // Waiting for first start byte
+    CtrlFSMWaitStart2,              // Waiting for second start byte
+    CtrlFSMWaitCmdByte1,            // Waiting for first byte of command packet
+    CtrlFSMWaitCmdByte2,            // Waiting for second byte of command packet
+    CtrlFSMWaitCmdByte3,            // Waiting for third byte of command packet
+    CtrlFSMWaitCmdByte4,            // Waiting for fourth byte of command packet
+    CtrlFSMWaitCmdByte5,            // Waiting for fifth byte of command packet
+    CtrlFSMWaitStop                 // Waiting for stop byte
 } CtrlFSMCommand_t;
+
 
 // Start and stop bytes for control packets
 #define CTRL_PACKET_START1          (0xAA)      // First start byte of a command packet
@@ -96,6 +94,10 @@ typedef enum CtrlFSMCommand
 #define CTRL_BAUD_RATE              (460800)    // Baud rate of control interface
 #define CTRL_CKSUM                  (0xff)      // Checksum of a valid packet
 
+// CtrlMsgHeader_t bit masks
+#define CMD_HOP_MASK                (0x0f)      // Mask for "hop" part of type_hop field
+#define CMD_TYPE_MASK               (0xf0)      // Mask for "type" part of type_hop field
+
 static volatile uint8_t g_flags;
 
 static void ctrl_fsm_downstream(CtrlMsgCommand_t * const cmd, const uint8_t rx_char);
@@ -105,7 +107,7 @@ static const SC16IS752Channel_t ChanDownstream = SC16IS752ChannelA,
                                 ChanUpstream = SC16IS752ChannelB;
 
 
-// ctrl_init() - initialise the control interface
+// ctrl_init() - initialise the control interface.
 //
 void ctrl_init()
 {
@@ -121,18 +123,22 @@ void ctrl_init()
         sc16is752_set_baud_rate(c, CTRL_BAUD_RATE);     // FIXME - check for errors
         sc16is752_enable_auto_rts(c, 1, 1);
     }
+
+    // FIXME - enable RHR interrupts; disable all other types of interrrupt.
 }
 
 
 // ctrl_serial_isr() - ISR called when the SC16IS752 dual UART raises an interrupt.  This function
-// does no work; it uses a bit in the <g_flags>
+// does no work; it uses a bit in the <g_flags> global to signal to ctrl_worker() that an interrupt
+// needs to be serviced.
+//
 void ctrl_serial_isr()
 {
     g_flags |= CTRL_FLAG_SERIAL_IRQ;
 }
 
 
-// ctrl_worker() -
+// ctrl_worker() - worker "process" for the control interface.  Needs to be called in a fast loop.
 //
 void ctrl_worker()
 {
@@ -240,15 +246,16 @@ static void ctrl_handle_command_packet(const CtrlMsgCommand_t * const cmd)
     CtrlMsgResponse_t response;
     size_t len = sizeof(response);
     const uint8_t start[2] = {CTRL_PACKET_START1, CTRL_PACKET_START2};
-
-    response.resp = CtrlRespUnsupportedOperation;
+    uint8_t cksum = 0;
 
     switch(cmd->header.cmd)
     {
         case CmdIdentify:
+            response.resp = ctrl_identify(cmd->arg.block);
             break;
 
         case CmdPowerState:
+            response.resp = ctrl_set_power_state(cmd->arg.power_state);
             break;
 
         case CmdChannel:
@@ -262,11 +269,22 @@ static void ctrl_handle_command_packet(const CtrlMsgCommand_t * const cmd)
         case CmdPairing:
             response.resp = ctrl_set_pairing(cmd->arg.pairing_state);
             break;
+
+        default:
+            response.resp = CtrlRespUnsupportedOperation;
+            break;
     }
 
     response.header.cmd = cmd->header.cmd;
     response.header.id = cmd->header.id;
     response.header.type_hop = 0;                           // FIXME check this
+    response.header.cksum = 0;
+
+    // Compute checksum
+    for(uint8_t i = 0, cksum = 0; i < len; ++i)
+        cksum += *((uint8_t *) &response);
+
+    response.header.cksum = CTRL_CKSUM - cksum;
 
     // Transmit response
     // FIXME - check for errors

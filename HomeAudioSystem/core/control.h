@@ -30,8 +30,8 @@ typedef enum CtrlArgChannel
 //
 typedef enum CtrlArgPairingState
 {
-    ArgPairingGetState      = 0,
-    ArgPairingForceUnpair   = 1
+    ArgPairingGetState      = 0,    // Respond with the current pairing state
+    ArgPairingForceUnpair   = 1     // Unpair from any paired audio source
 } CtrlArgPairingState_t;
 
 
@@ -40,9 +40,11 @@ typedef enum CtrlArgPairingState
 //
 typedef enum CtrlArgPowerState
 {
-    ArgPowerStateMinimum    = 0,
-    ArgPowerStateFull       = 1
+    ArgPowerStateMinimum    = 0,    // Enter the lowest-possible power state
+    ArgPowerStateSleep      = 1,    // Enter a sleep state
+    ArgPowerStateFull       = 2     // Enter full-power, normal-operations state
 } CtrlArgPowerState_t;
+
 
 // CtrlResponse_t - enumeration of control command response codes
 //
@@ -59,9 +61,12 @@ void ctrl_init();
 void ctrl_serial_isr();
 void ctrl_worker();
 
+
 // Command-handler function declarations.  These functions should be implemented in the appropriate
 // hardware-driver module.
 //
+CtrlResponse_t ctrl_identify(const uint8_t block);
+CtrlResponse_t ctrl_set_power_state(const CtrlArgPowerState_t state);
 CtrlResponse_t ctrl_set_channel(const CtrlArgChannel_t channel);
 CtrlResponse_t ctrl_set_gain(const int8_t gain);
 CtrlResponse_t ctrl_set_pairing(const CtrlArgPairingState_t state);
