@@ -8,6 +8,7 @@
 #include "pa_mono_tas5760m.h"
 #include "core/control.h"
 #include "dev/lc89091ja.h"
+#include "dev/pca9632.h"
 #include "dev/sc16is752.h"
 #include "dev/tas5760m.h"
 #include "lib/adc.h"
@@ -82,7 +83,12 @@ void firmware_main()
 
     lc89091ja_init();                       // Initialise the LC89091 digital receiver
     tas5760m_interface_init();              // Initialise the interface with the TAS5760M
+    pca9632_init();                         // Initialise the PCA9632 LED driver
     ctrl_init();                            // Initialise the control interface
+
+    // Set LED to red during initialisation
+    pca9632_sleep(0);
+    pca9632_pwm_set_all(0xff, 0x00, 0x00, 0x00);
 
     // Given that the amplifier module is powered via a PoE-style interface, i.e. is physically
     // remote from the power source, and the local dc-dc converters drive significant bulk
@@ -97,7 +103,7 @@ void firmware_main()
     } while(amp_vcc_mv < AMP_VCC_STARTUP_THRESHOLD);
 
     // Attempt to initialise and configure the amplifier module by calling tas5760m_init() until it
-    // returns success.  TODO: give up and report an error condition to the controller.
+    // returns success.  FIXME: give up and report an error condition to the controller.
     while(!tas5760m_init())
     {
         debug_putstr_p("TAS5760M: init failed\n");
@@ -107,11 +113,12 @@ void firmware_main()
     tas5760m_set_gain(-3);
     tas5760m_mute(0);           // Un-mute the amplifier
 
+    // Set LED to green to indicate normal operations
+    pca9632_pwm_set_all(0x00, 0xff, 0x00, 0x00);
+
     // Worker loop
     while(1)
     {
-        _delay_ms(100);         // FIXME remove
-        lc89091ja_worker();
         tas5760m_worker();
         ctrl_worker();
     }
@@ -121,6 +128,39 @@ void firmware_main()
 //
 // Handlers for control commands
 //
+
+
+// ctrl_identify() - provide device identity
+//
+CtrlResponse_t ctrl_identify(const uint8_t block)
+{
+    return CtrlRespOperationFailed;     // FIXME
+}
+
+
+// ctrl_set_power_state() - set the power state (sleep, wake, etc.) of the peripheral
+//
+CtrlResponse_t ctrl_set_power_state(const CtrlArgPowerState_t state)
+{
+    uint8_t ret = 1;
+
+    switch(state)
+    {
+        case ArgPowerStateSleep:            // Enter sleep mode
+            ret &= tas5760m_sleep(1);
+            // Fall through
+
+        case ArgPowerStateMinimum:          // Enter shutdown mode (implies sleep mode)
+            ret &= tas5760m_shut_down(1);
+            break;
+
+        case ArgPowerStateFull:             // Enter full-power mode
+            ret &= (tas5760m_shut_down(0) && tas5760m_sleep(0));
+            break;
+    }
+
+    return ret ? CtrlRespOK : CtrlRespOperationFailed;
+}
 
 
 // ctrl_set_channel() - set the channel (e.g. left or right) to be amplified by this module.

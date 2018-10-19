@@ -18,7 +18,7 @@
 #include "platform.h"
 
 
-#ifdef MODULE_PA_MONO_TAS5760M
+#ifdef WITH_LC89091JA
 
 #define LC89091JA_I2C_ADDR      (0x12)      // I2C address of the LC89091JA receiver
 
@@ -42,12 +42,4 @@ uint8_t lc89091_get_error_state()
     return gpio_read(PIN_RX_ERR);
 }
 
-
-// lc89091ja_worker() - worker function, to be called regularly.
-//
-void lc89091ja_worker()
-{
-
-}
-
-#endif // MODULE_PA_MONO_TAS5760M
+#endif // WITH_LC89091JA
