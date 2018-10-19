@@ -62,5 +62,7 @@ int main(void)
     adc_configure_input(PIN_VCC_IN);
     debug_printf("Vcc(in) = %lumV\n", sys_get_vcc());
 
-    firmware_main();
+    // firmware_main() should loop eternally; loop here in case it doesn't.
+    while(1)
+        firmware_main();        // should never return
 }
