@@ -26,6 +26,16 @@
 #define AMP_VCC_STARTUP_THRESHOLD       (20000)     // Voltage above which to start the amplifier
 #define AMP_INIT_RETRY_DELAY_MS         (100)       // Amp initialisation retry interval in ms
 
+// PATAS5760MSleepMode_t - enumeration mapping control API sleep modes to sleep modes supported by
+// this module.
+typedef enum PATAS5760MSleepMode
+{
+    PASMShutdown    = ArgPowerStateMinimum,     // Lowest-power mode
+    PASMSleep       = ArgPowerStateSleep,       // Sleep mode
+    PASMNormal      = ArgPowerStateFull         // Active mode
+} PATAS5760MSleepMode_t;
+
+static uint8_t set_sleep_mode(const PATAS5760MSleepMode_t mode);
 static uint16_t amp_get_vcc();
 
 
@@ -111,10 +121,10 @@ void firmware_main()
     }
 
     tas5760m_set_gain(-3);
-    tas5760m_mute(0);           // Un-mute the amplifier
+    tas5760m_mute(0);           // Unmute the amplifier
 
     // Set LED to green to indicate normal operations
-    pca9632_pwm_set_all(0x00, 0xff, 0x00, 0x00);
+    set_sleep_mode(PASMSleep);
 
     // Worker loop
     while(1)
@@ -122,6 +132,63 @@ void firmware_main()
         tas5760m_worker();
         ctrl_worker();
     }
+}
+
+
+// set_sleep_mode() - configure the module's power state according to the sleep mode specified by
+// <mode>.  Returns non-zero on success, zero on failure.
+//
+static uint8_t set_sleep_mode(const PATAS5760MSleepMode_t mode)
+{
+    // For "sleep" and "shutdown" modes, start by putting the amplifier to sleep; for all other
+    // modes, wake the amplifier.
+    if(!tas5760m_sleep((mode == PASMSleep) || (mode == PASMShutdown) ? 1 : 0))
+        return 0;
+
+    if(mode == PASMSleep)
+    {
+        // For sleep mode, put the amplifier IC to sleep, wake the LED driver IC, and make the LED
+        // blink turquoise intermittently.
+        if(!tas5760m_sleep(1))
+            return 0;
+
+        pca9632_sleep(0);
+        pca9632_mode_set(PCA9632ModeBlink);             // Enter blink mode
+        pca9632_pwm_set_all(0x00, 0x1f, 0x08, 0x00);    // Sleep colour = dim turquoise
+        pca9632_group_freq_set(119);                    // Blink LED every 5s (=(119+1)/24)
+        pca9632_group_pwm_set(3);                       // Set 1% duty cycle (=3/256) for blinking
+
+    }
+    else if(mode == PASMShutdown)
+    {
+        // For shutdown mode: shut down the amplifier IC, try to switch off the status LED, and
+        // put the LED driver IC to sleep.  If the LED updates don't work, it's not really a
+        // problem (hence errors are ignored).
+        if(!tas5760m_sleep(1))
+            return 0;
+
+        pca9632_pwm_set_all(0x00, 0x00, 0x00, 0x00);
+        pca9632_sleep(1);
+
+        // For "shutdown" mode, put the amplifier in its lowest-power state.
+        if(!tas5760m_shut_down(1))
+            return 0;
+    }
+    else        // Assume all other cases represent "normal" (=fully active) mode
+    {
+        if(!tas5760m_shut_down(0))
+            return 0;
+
+        pca9632_sleep(0);
+        pca9632_mode_set(PCA9632ModeDim);               // Enter dim mode
+        pca9632_pwm_set_all(0x00, 0xff, 0x00, 0x00);    // Awake colour = green
+        pca9632_group_pwm_set(255);                     // Set maximum brightness
+
+        if(!tas5760m_sleep(0))
+            return 0;
+    }
+
+    return 1;
 }
 
 
@@ -142,24 +209,7 @@ CtrlResponse_t ctrl_identify(const uint8_t block)
 //
 CtrlResponse_t ctrl_set_power_state(const CtrlArgPowerState_t state)
 {
-    uint8_t ret = 1;
-
-    switch(state)
-    {
-        case ArgPowerStateSleep:            // Enter sleep mode
-            ret &= tas5760m_sleep(1);
-            // Fall through
-
-        case ArgPowerStateMinimum:          // Enter shutdown mode (implies sleep mode)
-            ret &= tas5760m_shut_down(1);
-            break;
-
-        case ArgPowerStateFull:             // Enter full-power mode
-            ret &= (tas5760m_shut_down(0) && tas5760m_sleep(0));
-            break;
-    }
-
-    return ret ? CtrlRespOK : CtrlRespOperationFailed;
+    return set_sleep_mode(state) ? CtrlRespOK : CtrlRespOperationFailed;
 }
 
 
