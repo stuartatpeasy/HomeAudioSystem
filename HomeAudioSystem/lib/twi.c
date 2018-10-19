@@ -261,25 +261,29 @@ static TWICmdStatus_t twi_sync_cmd(const uint8_t dev_addr, const uint8_t reg_add
 
     status = twi_cmd_get_state();
 
-    switch(status)
+    // Map the final state of the command to a result code
+    switch(twi_cmd_get_state())
     {
-        case TWICmdSuccess:
+        case TWICmdStateIdle:
             if(!is_write)
                 *data = twi_cmd_get_data();
+            status = TWICmdSuccess;
             break;
 
         case TWICmdStateNack:
-        case TWICmdStateError:
-            // If the slave device didn't acknowledge us, or the command failed for any other
-            // reason, reset the state of the command object so that another command can be
-            // initiated.
-            twi_cmd_reset_state();
+            status = TWICmdNack;
             break;
 
+        case TWICmdStateError:
         default:
-            // Do nothing
+            status = TWICmdError;
             break;
     }
+
+    // If the operation was unsuccessful, reset the state of the command object so that a
+    // subsequent command may be initiated.
+    if(status != TWICmdSuccess)
+        twi_cmd_reset_state();
 
     return status;
 }
@@ -371,3 +375,27 @@ static TWIBusState_t twi_bus_status()
 {
     return (TWIBusState_t) (TWI0_MSTATUS & TWI_BUSSTATE_gm);
 }
+
+
+//
+// Debug functions from here on
+//
+#ifdef DEBUG
+
+// twi_dump_registers() - if a debug build is running, dump the contents of registers from 0 to
+// <max> (inclusive) in the device with the address specified by <address>.
+//
+void twi_dump_registers(const uint8_t address, const uint8_t max)
+{
+    uint8_t val = 0;
+
+    for(uint8_t r = 0; r <= max; ++r)
+    {
+        if(twi_sync_register_read(address, r, &val) == TWICmdSuccess)
+            debug_printf("R%02d = %02x\n", r, val);
+        else
+            debug_putstr_p("(read failed)\n");
+    }
+}
+
+#endif // DEBUG
