@@ -116,6 +116,12 @@
     <Compile Include="dev\lc89091ja.h">
       <SubType>compile</SubType>
     </Compile>
+    <Compile Include="dev\pca9632.c">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="dev\pca9632.h">
+      <SubType>compile</SubType>
+    </Compile>
     <Compile Include="dev\sc16is752.c">
       <SubType>compile</SubType>
     </Compile>
