@@ -16,25 +16,25 @@
 #define PCA9632_SWRESET_I2C_ADDR    (0x03)      // Address used for software reset
 
 #define PCA9632_SWRESET_BYTE1       (0xa5)      // First magic number used in software reset
-#define PCA9632_SWRESET_BYTE2       (0x5a)      // First magic number used in software reset
+#define PCA9632_SWRESET_BYTE2       (0x5a)      // Second magic number used in software reset
 
 // PCA9632Register_t - enumeration of registers in the PCA9632 LED driver IC.
 //
 typedef enum PCA9632Register
 {
-    PCA9632RegMode1         = 0x00,     // Mode register 1
-    PCA9632RegMode2         = 0x01,     // Mode register 2
-    PCA9632RegPWM0          = 0x02,     // Brightness control - LED0
-    PCA9632RegPWM1          = 0x03,     // Brightness control - LED1
-    PCA9632RegPWM2          = 0x04,     // Brightness control - LED2
-    PCA9632RegPWM3          = 0x05,     // Brightness control - LED3
-    PCA9632RegGrpPWM        = 0x06,     // Group duty cycle control
-    PCA9632RegGrpFreq       = 0x07,     // Group frequency
-    PCA9632RegLEDOut        = 0x08,     // LED output state
-    PCA9632RegSubAddr1      = 0x09,     // I2C bus sub-address 1
-    PCA9632RegSubAddr2      = 0x0a,     // I2C bus sub-address 2
-    PCA9632RegSubAddr3      = 0x0b,     // I2C bus sub-address 3
-    PCA9632RegAllCallAddr   = 0x0c      // LED all-call I2C bus address
+    PCA9632RegMode1         = 0x00,     // [RW] Mode register 1
+    PCA9632RegMode2         = 0x01,     // [RW] Mode register 2
+    PCA9632RegPWM0          = 0x02,     // [RW] Brightness control - LED0
+    PCA9632RegPWM1          = 0x03,     // [RW] Brightness control - LED1
+    PCA9632RegPWM2          = 0x04,     // [RW] Brightness control - LED2
+    PCA9632RegPWM3          = 0x05,     // [RW] Brightness control - LED3
+    PCA9632RegGrpPWM        = 0x06,     // [RW] Group duty cycle control
+    PCA9632RegGrpFreq       = 0x07,     // [RW] Group frequency
+    PCA9632RegLEDOut        = 0x08,     // [RW] LED output state
+    PCA9632RegSubAddr1      = 0x09,     // [RW] I2C bus sub-address 1
+    PCA9632RegSubAddr2      = 0x0a,     // [RW] I2C bus sub-address 2
+    PCA9632RegSubAddr3      = 0x0b,     // [RW] I2C bus sub-address 3
+    PCA9632RegAllCallAddr   = 0x0c      // [RW] LED all-call I2C bus address
 } PCA9632Register_t;
 
 //
@@ -62,10 +62,10 @@ typedef enum PCA9632Register
 //
 // LED driver output state (0x08)
 //
-#define PCA9632_LEDOUT_LDR3_SHIFT   (6)
-#define PCA9632_LEDOUT_LDR2_SHIFT   (4)
-#define PCA9632_LEDOUT_LDR1_SHIFT   (2)
-#define PCA9632_LEDOUT_LDR0_SHIFT   (0)
+#define PCA9632_LEDOUT_LDR3_SHIFT   (6)     // Offset of mode-control bits for LED driver 3
+#define PCA9632_LEDOUT_LDR2_SHIFT   (4)     // Offset of mode-control bits for LED driver 2
+#define PCA9632_LEDOUT_LDR1_SHIFT   (2)     // Offset of mode-control bits for LED driver 1
+#define PCA9632_LEDOUT_LDR0_SHIFT   (0)     // Offset of mode-control bits for LED driver 0
 
 // PCA9632LEDDriveMode_t - enumeration of the available drive modes for each LED driver output.
 typedef enum PCA9632LEDDriveMode
