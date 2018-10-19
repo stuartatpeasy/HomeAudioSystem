@@ -9,7 +9,7 @@
 
 #include "platform.h"
 
-#ifdef MODULE_PA_MONO_TAS5760M
+#ifdef WITH_TAS5760M
 
 #include <stdint.h>
 
@@ -52,5 +52,5 @@ void tas5760m_dump_fault(const uint8_t fault);
 #define tas5760m_dump_fault(x)
 #endif
 
-#endif // MODULE_PA_MONO_TAS5760M
+#endif // WITH_TAS5760M
 #endif

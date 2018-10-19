@@ -11,6 +11,8 @@
 #include "util/irq.h"
 
 
+#ifdef WITH_SC16IS752
+
 // SC16IS752Register_t - enumeration of the registers in the SC16IS752.  Many of these registers
 // share an address.  In such cases, bits in other registers determine which register is actually
 // accessed.
@@ -410,4 +412,5 @@ void sc16is752_dump_registers()
     }
 }
 
-#endif
+#endif // DEBUG
+#endif // WITH_SC16IS752

@@ -6,8 +6,10 @@
     Stuart Wallace <stuartw@atom.net>, September 2018.
 */
 
+#include "platform.h"
 #include <stdint.h>
 
+#ifdef WITH_SC16IS752
 
 // SC16IS752Channel_t - enumeration of the two transceiver channels in the SC16IS752.  These values
 // are used in the first byte of each SPI transaction.
@@ -63,4 +65,5 @@ void sc16is752_dump_registers();
 #define sc16is752_dump_registers()
 #endif
 
-#endif
+#endif // WITH_SC16IS752
+#endif // DEV_SC16IS752_H_INC

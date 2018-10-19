@@ -15,7 +15,7 @@
 #include <util/delay.h>
 
 
-#ifdef MODULE_PA_MONO_TAS5760M
+#ifdef WITH_TAS5760M
 
 #define TAS5760M_I2C_ADDR       (0x6c)      // Default I2C address of a TAS5760M amplifier
 #define TAS5760M_DEVICE_ID      (0x00)      // ID from the "Device Identification" register
@@ -186,6 +186,7 @@ uint8_t tas5760m_init()
 // tas5760m_sleep() - put the TAS5760M amplifier to sleep (if <sleep> is non-zero), or wake it up
 // (if <sleep> equals zero) by asserting or negating the SPK_SLEEP pin.  This should be done around
 // power-state changes in order to avoid audible artifacts associated with startup/shutdown.
+// Returns 1 on success, 0 on failure.
 //
 uint8_t tas5760m_sleep(const uint8_t sleep)
 {
@@ -213,7 +214,8 @@ uint8_t tas5760m_sleep(const uint8_t sleep)
 // tas5760m_shut_down() - shut down (if <shut_down> is non-zero), or switch on (if <shut_down>
 // equals zero) the TAS5760M amplifier.  Shutting the amplifier down reduces its power consumption
 // to the lowest possible state.  Consider using tas5760m_sleep() around calls to this function in
-// order to eliminate any audible artifacts arising from the change of power state.
+// order to eliminate any audible artifacts arising from the change of power state.  Returns 1 on
+// success, 0 on failure.
 //
 uint8_t tas5760m_shut_down(const uint8_t shut_down)
 {
@@ -231,24 +233,6 @@ uint8_t tas5760m_shut_down(const uint8_t shut_down)
         pc_val |= TAS5760M_PCTRL_nSPK_SD;
 
     return sync_register_write(TAS5760MRegPowerCtrl, pc_val);
-}
-
-
-// sync_register_read() - convenience wrapper around twi_sync_register_read().  Avoids the need to
-// specify TAS5760M_I2C_ADDR in every call.
-//
-static uint8_t sync_register_read(const TAS5760MRegister_t reg, uint8_t * const val)
-{
-    return twi_sync_register_read(TAS5760M_I2C_ADDR, reg, val) == TWICmdSuccess;
-}
-
-
-// sync_register_write() - convenience wrapper around twi_sync_register_write().  Avoids the need
-// to specify TAS5760M_I2C_ADDR in every call.
-//
-static uint8_t sync_register_write(const TAS5760MRegister_t reg, const uint8_t val)
-{
-    return twi_sync_register_write(TAS5760M_I2C_ADDR, reg, val) == TWICmdSuccess;
 }
 
 
@@ -360,6 +344,24 @@ void tas5760m_worker()
 }
 
 
+// sync_register_read() - convenience wrapper around twi_sync_register_read().  Avoids the need to
+// specify TAS5760M_I2C_ADDR in every call.
+//
+static uint8_t sync_register_read(const TAS5760MRegister_t reg, uint8_t * const val)
+{
+    return twi_sync_register_read(TAS5760M_I2C_ADDR, reg, val) == TWICmdSuccess;
+}
+
+
+// sync_register_write() - convenience wrapper around twi_sync_register_write().  Avoids the need
+// to specify TAS5760M_I2C_ADDR in every call.
+//
+static uint8_t sync_register_write(const TAS5760MRegister_t reg, const uint8_t val)
+{
+    return twi_sync_register_write(TAS5760M_I2C_ADDR, reg, val) == TWICmdSuccess;
+}
+
+
 //
 // Debug functions from here on
 //
@@ -370,17 +372,8 @@ void tas5760m_worker()
 //
 void tas5760m_dump_registers()
 {
-    TAS5760MRegister_t r;
-    uint8_t val = 0;
-
-    debug_putstr_p("\n==== TAS5760M register dump ====\n");
-    for(r = 0; r < TAS5760MRegEnd; ++r)
-    {
-        if(sync_register_read(r, &val))
-            debug_printf("R%02d = %02x\n", r, val);
-        else
-            debug_putstr_p("(read failed)\n");
-    }
+    debug_putstr_p("\n== TAS5760M register dump ==\n");
+    twi_dump_registers(TAS5760M_I2C_ADDR, TAS5760MRegDigitalClipper1);
 }
 
 
@@ -409,5 +402,5 @@ void tas5760m_dump_fault(const uint8_t fault)
     debug_putstr_p("err\n");
 }
 
-#endif
-#endif // MODULE_PA_MONO_TAS5760M
+#endif // DEBUG
+#endif // WITH_TAS5760M
