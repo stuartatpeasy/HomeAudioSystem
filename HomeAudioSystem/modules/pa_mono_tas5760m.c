@@ -124,7 +124,7 @@ void firmware_main()
     tas5760m_mute(0);           // Unmute the amplifier
 
     // Set LED to green to indicate normal operations
-    set_sleep_mode(PASMSleep);
+    set_sleep_mode(PASMNormal);
 
     // Worker loop
     while(1)
@@ -182,7 +182,7 @@ static uint8_t set_sleep_mode(const PATAS5760MSleepMode_t mode)
         pca9632_sleep(0);
         pca9632_mode_set(PCA9632ModeDim);               // Enter dim mode
         pca9632_pwm_set_all(0x00, 0xff, 0x00, 0x00);    // Awake colour = green
-        pca9632_group_pwm_set(255);                     // Set maximum brightness
+        pca9632_group_pwm_set(0x20);                    // Set 1/8th brightness
 
         if(!tas5760m_sleep(0))
             return 0;
