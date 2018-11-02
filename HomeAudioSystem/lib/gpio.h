@@ -8,14 +8,20 @@
 
 #include <stdint.h>
 #include <avr/io.h>
+#include "platform.h"
 
 
 // GPIOPort_t - enumeration of GPIO ports.  This list is specific to the smaller ATTiny models.
 typedef enum GPIOPort
 {
+#if defined(WITH_ATTINY816)
     GPIOPortA = 0,
     GPIOPortB,
     GPIOPortC
+#elif defined(WITH_ATTINY814)
+    GPIOPortA = 0,
+    GPIOPortB
+#endif
 } GPIOPort_t;
 
 
@@ -58,7 +64,12 @@ typedef enum GPIOSense
 
 
 #define GPIO_PIN_MAX            (7)
+
+#if defined(WITH_ATTINY814)
+#define GPIO_PORT_MAX           (GPIOPortB)        // Highest port on ATTiny{4|8}14
+#elif defined(WITH_ATTINY816)
 #define GPIO_PORT_MAX           (GPIOPortC)        // Highest port on ATTiny{4|8}16
+#endif
 
 // Macro enabling the construction of a GPIOPin_t struct from a port specifier and a pin number
 #define GPIOPIN(port_, pin_)    ((GPIOPin_t) { .port = port_, \
@@ -67,7 +78,9 @@ typedef enum GPIOSense
 // Further macros enabling the construction of a GPIOPin_t struct from a port name and a pin number
 #define GPIOA(pin_)             GPIOPIN(GPIOPortA, pin_)
 #define GPIOB(pin_)             GPIOPIN(GPIOPortB, pin_)
+#if defined(WITH_ATTINY816)
 #define GPIOC(pin_)             GPIOPIN(GPIOPortC, pin_)
+#endif // WITH_ATTINY816
 
 // Macro to test whether two GPIOPort_t objects refer to the same port and pin
 #define GPIOPIN_EQUAL(a, b)     (((a).port == (b).port) && ((a).pin == (b).pin))

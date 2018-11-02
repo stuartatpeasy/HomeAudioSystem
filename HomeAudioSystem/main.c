@@ -10,14 +10,18 @@
 #include "lib/debug.h"
 #include "lib/vref.h"
 
-#ifdef MODULE_PA_MONO_TAS5760M
+#if defined(MODULE_PA_MONO_TAS5760M)
 #include "modules/pa_mono_tas5760m.h"
+#elif defined(MODULE_BT_SOURCE_V1)
+#include "modules/bt_source_v1.h"
 #else
 #error "No module type specified - check platform.h"
 #endif
 
 int8_t g_irq_state = 0;     // Used in util/irq.h
 
+
+#if defined(PIN_VCC_IN)
 
 // sys_get_vcc() - read the ADC channel connected to a scaled representation of the system supply
 // voltage, and return the voltage, in millivolts, as a uint32_t.
@@ -39,6 +43,8 @@ static uint32_t sys_get_vcc()
     return 95 * adc_convert();
 }
 
+#endif // PIN_VCC_IN
+
 
 // Entry point
 //
@@ -58,8 +64,10 @@ int main(void)
     adc_set_initdelay(ADCInitDelay16);
     adc_enable(1);
 
+#if defined(PIN_VCC_IN)
     adc_configure_input(PIN_VCC_IN);
     debug_printf("Vcc(in) = %lumV\n", sys_get_vcc());
+#endif // PIN_VCC_IN
 
     // firmware_main() should loop eternally; loop here in case it doesn't.
     while(1)

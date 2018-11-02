@@ -19,6 +19,8 @@ static GPIOPin_t SPI_nSS;
 //
 void spi0_configure_master(const Pinset_t pinset, const SPIClkDiv_t div)
 {
+#if defined(WITH_ATTINY816)
+    // ATTiny816 has a default and alternate set of pins for its SPI0 port.
     if(pinset == PinsetDefault)
     {
         PORTMUX_CTRLB &= ~PORTMUX_SPI0_ALTERNATE_gc;
@@ -29,6 +31,13 @@ void spi0_configure_master(const Pinset_t pinset, const SPIClkDiv_t div)
         PORTMUX_CTRLB |= PORTMUX_SPI0_ALTERNATE_gc;
         SPI_nSS = PIN_SPI_nSS_ALT;
     }
+#elif defined(WITH_ATTINY814)
+    // ATTiny814 has a single pin-set for its SPI0 port.  Ignore the <pinset> argument.
+    (void) pinset;      // Suppress warning about unused argument
+
+    PORTMUX_CTRLB &= ~PORTMUX_SPI0_ALTERNATE_gc;
+    SPI_nSS = PIN_SPI_nSS_DEFAULT;
+#endif
 
     // Select SPI master mode and set prescaler.  Also: accept the default data order (MSB first),
     // and disable 2x-clock.  Do this without affecting the "enabled" state of the peripheral.
@@ -50,6 +59,8 @@ void spi0_port_activate(const uint8_t activate)
 {
     GPIOPin_t mosi, miso, sck;
 
+#if defined(WITH_ATTINY816)
+    // ATTiny816 has a default and alternate set of pins for its SPI0 port.
     if(GPIOPIN_EQUAL(SPI_nSS, PIN_SPI_nSS_DEFAULT))
     {
         // Default pin-set
@@ -64,6 +75,12 @@ void spi0_port_activate(const uint8_t activate)
         miso = PIN_SPI_MISO_ALT;
         sck = PIN_SPI_SCK_ALT;
     }
+#elif defined(WITH_ATTINY814)
+    // ATTiny814 has a single pin-set for its SPI0 port.
+    mosi = PIN_SPI_MOSI_DEFAULT;
+    miso = PIN_SPI_MISO_DEFAULT;
+    sck = PIN_SPI_SCK_DEFAULT;
+#endif
 
     // Set "resting" logic levels on the SPI port output pins
     gpio_set(SPI_nSS);

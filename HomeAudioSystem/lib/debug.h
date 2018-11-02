@@ -38,6 +38,6 @@ void debug_put_reg8_p(const char *msg, const uint8_t regval);
 #define debug_printf(fmt, ...)
 #define debug_put_reg8_p(msg, regval)
 
-#endif  // _DEBUG
+#endif  // DEBUG
 
 #endif

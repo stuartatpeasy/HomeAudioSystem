@@ -1,5 +1,5 @@
-#ifndef PLATFORM_ATTINYX16_H_INC
-#define PLATFORM_ATTINYX16_H_INC
+#ifndef PLATFORM_ATTINYX14_H_INC
+#define PLATFORM_ATTINYX14_H_INC
 /*
     platform_attinyx16.h - pin declarations for the ATTiny416/816 uCs.
 
@@ -21,10 +21,4 @@
 #define PIN_USART_RXD_DEFAULT       GPIOB(3)    // [I] USART RXD (default pin-set)
 #define PIN_USART_TXD_DEFAULT       GPIOB(2)    // [O] USART TXD (default pin-set)
 
-// Port C
-#define PIN_SPI_nSS_ALT             GPIOC(3)    // [O] SPI slave select (alternate pin-set)
-#define PIN_SPI_MOSI_ALT            GPIOC(2)    // [O] SPI MOSI (alternate pin-set)
-#define PIN_SPI_MISO_ALT            GPIOC(1)    // [I] SPI MISO (alternate pin-set)
-#define PIN_SPI_SCK_ALT             GPIOC(0)    // [O] SPI clock (alternate pin-set)
-
-#endif
+#endif // PLATFORM_ATTINYX14_H_INC
