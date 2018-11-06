@@ -40,10 +40,9 @@
         </dependencies>
       </framework-data>
     </AsfFrameworkConfig>
-    <avrtool>
-    </avrtool>
+    <avrtool>com.atmel.avrdbg.tool.atmelice</avrtool>
     <avrtoolserialnumber>J41800025581</avrtoolserialnumber>
-    <avrdeviceexpectedsignature>0x1E9321</avrdeviceexpectedsignature>
+    <avrdeviceexpectedsignature>0x1E9322</avrdeviceexpectedsignature>
     <avrtoolinterface>UPDI</avrtoolinterface>
     <com_atmel_avrdbg_tool_atmelice>
       <ToolOptions>
@@ -244,6 +243,12 @@
       <SubType>compile</SubType>
     </Compile>
     <Compile Include="dev\pca9632.h">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="dev\rn52.c">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="dev\rn52.h">
       <SubType>compile</SubType>
     </Compile>
     <Compile Include="dev\sc16is752.c">

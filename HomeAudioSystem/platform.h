@@ -59,19 +59,49 @@
 #define PIN_VCC_IN                  GPIOA(6)    // [AI] System supply voltage (scaled)
 
 // Port B
-#define PIN_I2C_SDA                 GPIOB(1)    // [I/O] I2C data
-#define PIN_I2C_SCL                 GPIOB(0)    // [I/O] I2C clock
+#define PIN_I2C_SDA                 GPIOB(1)    // [IO] I2C data
+#define PIN_I2C_SCL                 GPIOB(0)    // [IO] I2C clock
 
 // Port C
-#define PIN_nUART_IRQ               GPIOC(3)    // [I] SC16IS752 UART interrupt request output
-#define PIN_nSPK_FAULT              GPIOC(2)    // [I] TAS5760M speaker fault output
-#define PIN_nSPK_SD                 GPIOC(1)    // [O] TAS5760M speaker shutdown input
-#define PIN_RX_ERR                  GPIOC(0)    // [I] LC89091 error output
+#define PIN_nUART_IRQ               GPIOC(3)    // [I]  SC16IS752 UART interrupt request output
+#define PIN_nSPK_FAULT              GPIOC(2)    // [I]  TAS5760M speaker fault output
+#define PIN_nSPK_SD                 GPIOC(1)    // [O]  TAS5760M speaker shutdown input
+#define PIN_RX_ERR                  GPIOC(0)    // [I]  LC89091 error output
 
 #elif defined(MODULE_BT_SOURCE_V1)
+/*
+                           ATtiny814
+                       +---------------+
+                  VDD -| 1          14 |- GND
+        UART_nSS  PA4 -| 2          13 |- PA3  UART_SCLK
+       UART_nIRQ  PA5 -| 3          12 |- PA2  UART_MISO
+         BT_DE_B  PA6 -| 4          11 |- PA1  UART_MOSI
+         BT_DE_A  PA7 -| 5          10 |- PA0  UPDI
+      BT_UART_TX  PB3 -| 6           9 |- PB0  I2C_SCL
+      BT_UART_RX  PB2 -| 7           8 |- PB1  I2C_SDA
+                       +---------------+
+*/
 
 #define WITH_PCA9632
+#define WITH_RN52
 #define WITH_ATTINY814
+
+// Pin definitions
+//
+// Port A
+#define PIN_BT_DE_A                 GPIOA(7)    // [O]  Audio data driver enable - channel B
+#define PIN_BT_DE_B                 GPIOA(6)    // [O]  Audio data driver enable - channel A
+#define PIN_UART_nIRQ               GPIOA(5)    // [I]  IRQ input from UART
+#define PIN_UART_nSS                GPIOA(4)    // [O]  UART SPI slave select
+#define PIN_UART_SCLK               GPIOA(3)    // [O]  UART SPI serial clock
+#define PIN_UART_MISO               GPIOA(2)    // [I]  UART SPI master-in, slave-out
+#define PIN_UART_MOSI               GPIOA(1)    // [I]  UART SPI master-out, slave-in
+
+// Port B
+#define BT_UART_TX                  GPIOB(3)    // [I]  Bluetooth module UART TX (input to uC)
+#define BT_UART_RX                  GPIOB(2)    // [O]  Bluetooth module UART RX (output from uC)
+#define I2C_SDA                     GPIOB(1)    // [IO] I2C (aka TWI) data
+#define I2C_SCL                     GPIOB(0)    // [O]  I2C (aka TWI) clock
 
 #else
 #error "No module type specified - check compiler directives"
