@@ -7,6 +7,7 @@
     Stuart Wallace <stuartw@atom.net>, October 2018.
 */
 
+#include <stddef.h>             // size_t
 #include <stdint.h>
 
 
@@ -53,7 +54,8 @@ typedef enum CtrlResponse
     CtrlRespOK                      = 0,    // The operation completed successfully
     CtrlRespOperationFailed         = 1,    // The operation failed
     CtrlRespUnsupportedOperation    = 2,    // The operation is not supported by this device
-    CtrlRespBadArg                  = 3     // The command supplied an invalid argument
+    CtrlRespBadArg                  = 3,    // The command supplied an invalid argument
+    CtrlRespBadPacketLen            = 4     // The command has an invalid length
 } CtrlResponse_t;
 
 
@@ -70,5 +72,6 @@ CtrlResponse_t ctrl_set_power_state(const CtrlArgPowerState_t state);
 CtrlResponse_t ctrl_set_channel(const CtrlArgChannel_t channel);
 CtrlResponse_t ctrl_set_gain(const int8_t gain);
 CtrlResponse_t ctrl_set_pairing(const CtrlArgPairingState_t state);
+CtrlResponse_t ctrl_set_name(const char * const name, const size_t len);
 
 #endif

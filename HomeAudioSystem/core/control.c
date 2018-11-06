@@ -8,8 +8,9 @@
 #include "control.h"
 #include "dev/sc16is752.h"
 #include "util/irq.h"
-#include <stddef.h>             // size_t
 
+
+#define CTRL_RX_PAYLOAD_BUF_LEN     (31)        // Length of packet RX buffer in bytes
 
 // CtrlCmd_t - enumeration of commands supported by the system
 //
@@ -19,7 +20,8 @@ typedef enum CtrlCmd
     CmdPowerState   = 1,        // Set device power state
     CmdChannel      = 2,        // Set channel amplified by device, or used by source device
     CmdGain         = 3,        // Set device gain
-    CmdPairing      = 4         // Set or retrieve pairing status (e.g. for Bluetooth devices)
+    CmdPairing      = 4,        // Set or retrieve pairing status (e.g. for Bluetooth devices)
+    CmdSetName      = 5         // Set device name, to be displayed to users
 } CtrlCmd_t;
 
 
@@ -27,7 +29,7 @@ typedef enum CtrlCmd
 //
 typedef struct CtrlMsgHeader
 {
-    uint8_t             type_hop;       // [7:4] - message type; [3:0] - hop count
+    uint8_t             len_hop;        // [7:3] - payload length; [2:0] - hop count
     uint8_t             id;             // Message ID
     CtrlCmd_t           cmd;            // Command identifier
     uint8_t             cksum;          // Checksum
@@ -73,11 +75,8 @@ typedef enum CtrlFSMCommand
 {
     CtrlFSMWaitStart1,              // Waiting for first start byte
     CtrlFSMWaitStart2,              // Waiting for second start byte
-    CtrlFSMWaitCmdByte1,            // Waiting for first byte of command packet
-    CtrlFSMWaitCmdByte2,            // Waiting for second byte of command packet
-    CtrlFSMWaitCmdByte3,            // Waiting for third byte of command packet
-    CtrlFSMWaitCmdByte4,            // Waiting for fourth byte of command packet
-    CtrlFSMWaitCmdByte5,            // Waiting for fifth byte of command packet
+    CtrlFSMHeader,                  // Receiving the command packet header
+    CtrlFSMPayload,                 // Receiving the message payload
     CtrlFSMWaitStop                 // Waiting for stop byte
 } CtrlFSMCommand_t;
 
@@ -95,16 +94,27 @@ typedef enum CtrlFSMCommand
 #define CTRL_CKSUM                  (0xff)      // Checksum of a valid packet
 
 // CtrlMsgHeader_t bit masks
-#define CMD_HOP_MASK                (0x0f)      // Mask for "hop" part of type_hop field
-#define CMD_TYPE_MASK               (0xf0)      // Mask for "type" part of type_hop field
+#define CMD_HOP_MASK                (0x07)      // Mask for "hop" part of len_hop field
+#define CMD_LEN_MASK                (0xf8)      // Mask for "len" part of len_hop field
+#define CMD_LEN_SHIFT               (3)         // Offset of bit 0 of "len" part of len_hop field
+
+// Obtain payload length from a message header
+#define CMD_HDR_GET_PAYLOAD_LEN(hdr)    (((hdr).len_hop & CMD_LEN_MASK) >> CMD_LEN_SHIFT)
 
 static volatile uint8_t g_flags;
 
-static void ctrl_fsm_downstream(CtrlMsgCommand_t * const cmd, const uint8_t rx_char);
-static void ctrl_handle_command_packet(const CtrlMsgCommand_t * const cmd);
+static void ctrl_fsm_receive_byte(const uint8_t rx_char);
+static void ctrl_handle_command_packet();
 
 static const SC16IS752Channel_t ChanDownstream = SC16IS752ChannelA,
                                 ChanUpstream = SC16IS752ChannelB;
+
+// Buffer for packets received from downstream controller
+static struct
+{
+    CtrlMsgHeader_t hdr;
+    uint8_t payload[CTRL_RX_PAYLOAD_BUF_LEN];
+} rx_buffer;
 
 
 // ctrl_init() - initialise the control interface.
@@ -142,8 +152,6 @@ void ctrl_serial_isr()
 //
 void ctrl_worker()
 {
-    static CtrlMsgCommand_t downstream_packet;
-
     if(g_flags & CTRL_FLAG_SERIAL_IRQ)
     {
         SC16IS752IntFlags_t ser_irq_flags;
@@ -163,7 +171,7 @@ void ctrl_worker()
         // If a byte has been received from the downstream port, pass it to the downstream FSM for
         // handling.
         if(SC16IS752IntRXDataReady(ser_irq_flags))
-            ctrl_fsm_downstream(&downstream_packet, sc16is752_rx(ChanDownstream));
+            ctrl_fsm_receive_byte(sc16is752_rx(ChanDownstream));
 
         g_flags &= ~CTRL_FLAG_SERIAL_IRQ;
         interrupt_enable_increment();
@@ -171,28 +179,31 @@ void ctrl_worker()
 
     if(g_flags & CTRL_FLAG_DOWNSTREAM_PKT_RX)
     {
-        if(downstream_packet.header.type_hop & CMD_HOP_MASK)
+        if(rx_buffer.hdr.len_hop & CMD_HOP_MASK)
         {
+            const uint8_t len = sizeof(CtrlMsgHeader_t) +
+                                ((rx_buffer.hdr.len_hop & CMD_LEN_MASK) >> CMD_LEN_SHIFT);
+
             // Decrement hop count and forward packet to upstream port
-            --downstream_packet.header.type_hop;
+            --rx_buffer.hdr.len_hop;
 
             // FIXME - check for failure
-            sc16is752_tx_buf(ChanUpstream, &downstream_packet, sizeof(downstream_packet));
+            sc16is752_tx_buf(ChanUpstream, &rx_buffer, len);
         }
         else
-            ctrl_handle_command_packet(&downstream_packet);
+            ctrl_handle_command_packet();
 
         g_flags &= ~CTRL_FLAG_DOWNSTREAM_PKT_RX;
     }
 }
 
 
-// ctrl_fsm_downstream() - FSM handling receipt of data from the downstream control port.
+// ctrl_fsm_receive_byte() - FSM handling receipt of data from the downstream control port.
 //
-static void ctrl_fsm_downstream(CtrlMsgCommand_t * const cmd, const uint8_t rx_char)
+static void ctrl_fsm_receive_byte(const uint8_t rx_char)
 {
     static CtrlFSMCommand_t state = CtrlFSMWaitStart1;
-    static uint8_t cksum;
+    static uint8_t cksum, bytes_remaining, write_ptr;
 
     switch(state)
     {
@@ -206,22 +217,33 @@ static void ctrl_fsm_downstream(CtrlMsgCommand_t * const cmd, const uint8_t rx_c
             // reset the FSM such that it waits for the start of a new packet.
             if(rx_char == CTRL_PACKET_START2)
             {
-                state = CtrlFSMWaitCmdByte1;
+                state = CtrlFSMHeader;
+                bytes_remaining = sizeof(CtrlMsgHeader_t);
+                write_ptr = 0;
                 cksum = 0;
             }
             else
                 state = CtrlFSMWaitStart1;
             break;
 
-        case CtrlFSMWaitCmdByte1:
-        case CtrlFSMWaitCmdByte2:
-        case CtrlFSMWaitCmdByte3:
-        case CtrlFSMWaitCmdByte4:
-        case CtrlFSMWaitCmdByte5:
-            *(((uint8_t *) cmd) + (state - CtrlFSMWaitCmdByte1))
-                = rx_char;
+        case CtrlFSMHeader:
+        case CtrlFSMPayload:
+            *(((uint8_t *) &rx_buffer) + write_ptr++) = rx_char;
             cksum += rx_char;
-            ++state;
+            if(!--bytes_remaining)
+            {
+                if(state == CtrlFSMHeader)
+                {
+                    // Header received; now obtain payload length and prepare to receive payload
+                    bytes_remaining = CMD_HDR_GET_PAYLOAD_LEN(rx_buffer.hdr);
+                    state = CtrlFSMPayload;
+                }
+                else
+                {
+                    // Payload received; now wait for stop byte
+                    state = CtrlFSMWaitStop;
+                }
+            }
             break;
 
         case CtrlFSMWaitStop:
@@ -241,33 +263,49 @@ static void ctrl_fsm_downstream(CtrlMsgCommand_t * const cmd, const uint8_t rx_c
 
 // ctrl_handle_command_packet() - handle a packet addressed to this device by the controller.
 //
-static void ctrl_handle_command_packet(const CtrlMsgCommand_t * const cmd)
+static void ctrl_handle_command_packet()
 {
     CtrlMsgResponse_t response;
     size_t len = sizeof(response);
+    const size_t payload_len = (rx_buffer.hdr.len_hop & CMD_LEN_MASK) >> CMD_LEN_SHIFT;
     const uint8_t start[2] = {CTRL_PACKET_START1, CTRL_PACKET_START2};
     uint8_t cksum = 0;
 
-    switch(cmd->header.cmd)
+    // Each branch of the following switch statement validates the length of the received payload
+    // before executing the corresponding command handler.  Default the response code to
+    // CtrlRespBadPacketLen here, in order to avoid identical "else" clauses in each branch of the
+    // switch.
+    response.resp = CtrlRespBadPacketLen;
+
+    switch(rx_buffer.hdr.cmd)
     {
         case CmdIdentify:
-            response.resp = ctrl_identify(cmd->arg.block);
+            if(payload_len == sizeof(uint8_t))
+                response.resp = ctrl_identify(rx_buffer.payload[0]);
             break;
 
         case CmdPowerState:
-            response.resp = ctrl_set_power_state(cmd->arg.power_state);
+            if(payload_len == sizeof(CtrlArgPowerState_t))
+                response.resp = ctrl_set_power_state(*((CtrlArgPowerState_t *) rx_buffer.payload));
             break;
 
         case CmdChannel:
-            response.resp = ctrl_set_channel(cmd->arg.channel);
+            if(payload_len == sizeof(CtrlArgChannel_t))
+                response.resp = ctrl_set_channel(*((CtrlArgChannel_t *) rx_buffer.payload));
             break;
 
         case CmdGain:
-            response.resp = ctrl_set_gain(cmd->arg.gain);
+            if(payload_len == sizeof(int8_t))
+                response.resp = ctrl_set_gain((int8_t) rx_buffer.payload[0]);
             break;
 
         case CmdPairing:
-            response.resp = ctrl_set_pairing(cmd->arg.pairing_state);
+            if(payload_len == sizeof(CtrlArgPairingState_t))
+                response.resp = ctrl_set_pairing(*((CtrlArgPairingState_t *) rx_buffer.payload));
+            break;
+
+        case CmdSetName:
+            response.resp = ctrl_set_name((const char *) &rx_buffer.payload, payload_len);
             break;
 
         default:
@@ -275,9 +313,9 @@ static void ctrl_handle_command_packet(const CtrlMsgCommand_t * const cmd)
             break;
     }
 
-    response.header.cmd = cmd->header.cmd;
-    response.header.id = cmd->header.id;
-    response.header.type_hop = 0;                           // FIXME check this
+    response.header.cmd = rx_buffer.hdr.cmd;
+    response.header.id = rx_buffer.hdr.id;
+    response.header.len_hop = 0;                           // FIXME check this
     response.header.cksum = 0;
 
     // Compute checksum
