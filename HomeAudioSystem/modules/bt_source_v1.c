@@ -8,6 +8,7 @@
 #include "bt_source_v1.h"
 #include "core/control.h"
 #include "dev/pca9632.h"
+#include "lib/gpio.h"
 #include "lib/twi.h"
 #include "util/irq.h"
 
@@ -31,6 +32,18 @@ void firmware_main()
     // Set LED to red during initialisation
     pca9632_sleep(0);
     pca9632_pwm_set_all(0xff, 0x00, 0x00, 0x00);
+
+    // Initialise the lines used to select a driver for outbound audio data
+    gpio_clear(PIN_BT_DE_A);
+    gpio_clear(PIN_BT_DE_B);
+    gpio_make_output(PIN_BT_DE_A);
+    gpio_make_output(PIN_BT_DE_B);
+
+    // FIXME - remove this
+    gpio_set(PIN_BT_DE_A);      // Activate driver channel A
+
+    // Set LED to green to indicate that initialisation is complete
+    pca9632_pwm_set_all(0x40, 0x00, 0x20, 0x00);
 
     // Worker loop
     while(1)

@@ -247,4 +247,13 @@ CtrlResponse_t ctrl_set_pairing(const CtrlArgPairingState_t state)
     return CtrlRespUnsupportedOperation;
 }
 
+
+// ctrl_set_name() - set the name of the device.  This is the name displayed to users, and should
+// uniquely identify the device.
+//
+CtrlResponse_t ctrl_set_name(const char * const name, const size_t len)
+{
+    return CtrlRespUnsupportedOperation;
+}
+
 #endif // MODULE_PA_MONO_TAS5760M
