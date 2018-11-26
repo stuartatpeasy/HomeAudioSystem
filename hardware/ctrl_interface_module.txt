@@ -1,0 +1,3 @@
+[2018-11-26] rev0 -> rev1 changes
+- reduced hole sizes in muRata 7861x footprint
+- minor tidying
