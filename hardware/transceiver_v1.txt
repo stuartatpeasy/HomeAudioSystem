@@ -1,3 +1,5 @@
 [2018-11-26] rev0 -> rev1 changes
+- added TPS22810 intelligent switch to act as a controller for 60V/12V intelligent switches
+- designated motherboard connector pin 13 (formerly nc) as PWREN: switches 60V/12V supplies using an active-high 3.3V-compatible logic level
 - reduced hole sizes in muRata 7861x footprint
 - minor tidying
