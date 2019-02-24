@@ -123,7 +123,12 @@ inline uint8_t gpio_pin_bit(const GPIOPin_t pin)
 
 void gpio_wait_high(const GPIOPin_t pin);
 void gpio_wait_low(const GPIOPin_t pin);
+GPIOSense_t gpio_get_sense(const GPIOPin_t pin);
 void gpio_set_sense(const GPIOPin_t pin, const GPIOSense_t sense);
 void gpio_set_level(const GPIOPin_t pin, const uint8_t level);
+uint8_t gpio_get_pullup(const GPIOPin_t pin);
+void gpio_set_pullup(const GPIOPin_t pin, const uint8_t enable);
+uint8_t gpio_get_invert(const GPIOPin_t pin);
+void gpio_set_invert(const GPIOPin_t pin, uint8_t enable);
 
 #endif
